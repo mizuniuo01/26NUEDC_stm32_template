@@ -30,6 +30,7 @@
 #include "system.h"
 #include "error_handler.h"
 #include "blueteeth.h"
+#include "bldc.h"
 #include "buzzer.h"
 #include "cam.h"
 #include "encoder.h"
@@ -143,6 +144,7 @@ int main(void)
     while (1) {
         system_state();
         error_handler_task();
+        bldc_task(system_bldc_bus());
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -271,6 +273,10 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     if (huart->Instance == USART6) {
         gyro_rx_callback(huart, Size);
     }
+
+    if (huart->Instance == USART2) {
+        bldc_rx_callback(system_bldc_bus(), huart, Size);
+    }
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
@@ -278,12 +284,20 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
     if (huart->Instance == USART1) {
         blueteeth_tx_callback(huart);
     }
+
+    if (huart->Instance == USART2) {
+        bldc_tx_callback(system_bldc_bus(), huart);
+    }
 }
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
     if (huart->Instance == USART6) {
         gyro_error_callback(huart);
+    }
+
+    if (huart->Instance == USART2) {
+        bldc_error_callback(system_bldc_bus(), huart);
     }
 }
 

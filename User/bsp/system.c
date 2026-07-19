@@ -50,6 +50,9 @@ static led_handle_t led3;
 static led_handle_t led4;
 static buzzer_handle_t buzzer;
 static motor_handle_t motor;
+static bldc_bus_t bldc_bus;
+static bldc_motor_t bldc_x;
+static bldc_motor_t bldc_y;
 
 /* getter：只返回指针，不暴露实体 */
 
@@ -81,6 +84,33 @@ buzzer_handle_t *system_buzzer(void)
 motor_handle_t *system_motor(void)
 {
     return &motor;
+}
+
+/**
+ * @brief  获取 F32C 电机共享串口总线实例。
+ * @return 返回系统持有的总线实例，调用方不得直接修改其成员。
+ */
+bldc_bus_t *system_bldc_bus(void)
+{
+    return &bldc_bus;
+}
+
+/**
+ * @brief  获取云台 X 轴 F32C 电机实例。
+ * @return 返回地址为 1 的 X 轴电机实例。
+ */
+bldc_motor_t *system_bldc_x(void)
+{
+    return &bldc_x;
+}
+
+/**
+ * @brief  获取云台 Y 轴 F32C 电机实例。
+ * @return 返回地址为 2 的 Y 轴电机实例。
+ */
+bldc_motor_t *system_bldc_y(void)
+{
+    return &bldc_y;
 }
 
 pid_t *system_pid_speed_left(void)
@@ -189,10 +219,13 @@ void system_init(void)
     };
     motor_init(&motor, &motor_cfg);
 
-    /* 通信单实例 */
+    /* 通信类 */
     blueteeth_init(&huart1);
     gyro_init(&huart6);
     cam_init(&huart3);
+    (void)bldc_bus_init(&bldc_bus, &huart2);
+    (void)bldc_motor_init(&bldc_x, &bldc_bus, BLDC_X_ADDRESS);
+    (void)bldc_motor_init(&bldc_y, &bldc_bus, BLDC_Y_ADDRESS);
     /* oled_init(I2C_OLED_INST); */
 
     /* 驱动 / 执行器类 */
