@@ -52,6 +52,27 @@ volatile uint8_t display_refresh_flag;
 static char error_msg[64];
 
 /**
+ * @brief  显示单个无刷电机的缓存反馈数据。
+ * @param  line_y  蓝牙屏显行的 Y 坐标。
+ * @param  axis    电机轴名称。
+ * @param  motor   无刷电机实例。
+ * @return 无。
+ */
+static void display_bldc_telemetry(int16_t line_y, const char *axis, const bldc_motor_t *motor)
+{
+    bldc_telemetry_t telemetry;
+
+    if (bldc_get_telemetry(motor, &telemetry) != BLDC_STATUS_OK) {
+        blueteeth_display(0, line_y, "BLDC %s: waiting...", axis);
+        return;
+    }
+
+    blueteeth_display(0, line_y, "BLDC %s: S=%ld T=%.1f M=%.1f A=%.1f V=%.2f", axis,
+        (long)telemetry.speed_rpm, telemetry.total_angle_deg, telemetry.mechanical_angle_deg,
+        telemetry.acceleration_rps2, telemetry.bus_voltage_v);
+}
+
+/**
  * @brief  上报错误信息
  * @param  format  格式化字符串
  * @param  ...     可变参数
@@ -132,4 +153,6 @@ void display_task(void)
         sp_pid.kd);
     blueteeth_display(0, DISPLAY_LINE_8_Y, "AngPID: P=%.1f I=%.2f D=%.1f", ap_pid.kp, ap_pid.ki,
         ap_pid.kd);
+    display_bldc_telemetry(DISPLAY_LINE_9_Y, "X", system_bldc_x());
+    display_bldc_telemetry(DISPLAY_LINE_10_Y, "Y", system_bldc_y());
 }
