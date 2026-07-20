@@ -41,6 +41,7 @@
 #include "pwm.h"
 #include "pattern.h"
 #include "sensor.h"
+#include "servo.h"
 #include "display.h"
 #include "bt_command.h"
 #include "motion_control.h"
@@ -183,8 +184,10 @@ int main(void)
         error_handler_task();
         blueteeth_task();
         bldc_task(system_bldc_bus());
+        servo_task();
         bldc_feedback_request_task();
         display_task();
+        servo_move(SERVO_DIRECTION_CLOCKWISE, 90.0f);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -335,6 +338,10 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
     if (huart->Instance == USART2) {
         bldc_tx_callback(system_bldc_bus(), huart);
+    }
+
+    if (huart->Instance == UART4) {
+        servo_tx_callback(huart);
     }
 }
 

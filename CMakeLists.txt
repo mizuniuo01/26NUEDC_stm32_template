@@ -57,6 +57,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     User/drivers/motor.c
     User/drivers/pwm.c
     User/drivers/sensor.c
+    User/drivers/servo.c
     User/libraries/pid.c
     User/modules/motion_control.c
     User/modules/motion_manager.c

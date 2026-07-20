@@ -32,6 +32,7 @@
 #include "blueteeth.h"
 #include "gyroscope.h"
 #include "sensor.h"
+#include "servo.h"
 #include "pwm.h"
 #include "cam.h"
 #include "motor.h"
@@ -226,6 +227,17 @@ void system_init(void)
     (void)bldc_bus_init(&bldc_bus, &huart2);
     (void)bldc_motor_init(&bldc_x, &bldc_bus, BLDC_X_ADDRESS);
     (void)bldc_motor_init(&bldc_y, &bldc_bus, BLDC_Y_ADDRESS);
+
+    servo_config_t servo_config = {
+        .huart = &huart4,
+        .servo_id = 0U,
+        .positive_direction = SERVO_POSITIVE_ANGLE_CLOCKWISE,
+        .clockwise_limit_deg = 180.0f,
+        .counterclockwise_limit_deg = 180.0f,
+        .default_interval_ms = 100U,
+        .power_mw = 0U,
+    };
+    (void)servo_init(&servo_config);
     /* oled_init(I2C_OLED_INST); */
 
     /* 驱动 / 执行器类 */
