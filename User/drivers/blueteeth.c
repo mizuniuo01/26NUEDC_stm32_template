@@ -115,6 +115,7 @@ static const blueteeth_command_map_t cmd_table[] = {
     {"big_diff_down", on_big_diff_down},
     {"motion_start", on_motion_start},
     {"motion_stop", on_motion_stop},
+    {"shoot", on_shoot},
 };
 
 /* 指令表条目数 */

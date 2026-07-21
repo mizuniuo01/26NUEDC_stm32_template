@@ -24,4 +24,8 @@ extern volatile uint8_t display_refresh_flag;
 void display_task(void);
 void display_show_error(const char *format, ...);
 
+/* 自动瞄准调度层更新、显示任务持续输出的距离缓存。 */
+void display_set_distance(float distance_mm);
+void display_clear_distance(void);
+
 #endif /* DISPLAY_H */

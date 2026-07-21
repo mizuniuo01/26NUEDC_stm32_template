@@ -3,25 +3,43 @@
 
 #include <stdint.h>
 
-/* 感知参数 */
-#define OBSTACLE_THRESH_MM 100.0f  /* 障碍物距离阈值（mm） */
+/* 感知模块接口状态。 */
 typedef enum {
-    DIRECTION_STRAIGHT = 0,
-    DIRECTION_RIGHT    = 1,
-    DIRECTION_LEFT     = 2,
-    DIRECTION_INVALID  = 3,
-} direction_t;
+    PERCEPTION_STATUS_OK = 0,
+    PERCEPTION_STATUS_INVALID_ARGUMENT = -1,
+    PERCEPTION_STATUS_NOT_READY = -2,
+    PERCEPTION_STATUS_BUSY = -3,
+    PERCEPTION_STATUS_NOT_CONFIGURED = -4,
+    PERCEPTION_STATUS_NOT_MEASURABLE = -5,
+    PERCEPTION_STATUS_IO_ERROR = -6,
+} perception_status_t;
 
+/* 上层消费的摄像头目标数据。 */
 typedef struct {
-    uint8_t direction;      /* 0: 直行, 1: 右转, 2: 左转 */
-    uint8_t green;          /* 1: 绿灯, 0: 非绿灯 */
-    uint8_t stop_flag;      /* 1: STOP 标志, 0: 无 */
-    uint8_t all_black_flag; /* 1: 全黑, 0: 非全黑 */
-    uint8_t obstacle_flag;  /* 1: 有障碍物, 0: 无障碍物 */
-} perception_data_t;
+    int16_t error_x;
+    int16_t error_y;
+    uint32_t update_tick_ms;
+    uint8_t has_target;
+} perception_target_data_t;
 
+/* 生命周期与非阻塞感知任务。 */
 void perception_init(void);
 void perception_task(void);
-perception_data_t *perception_get_data(void);
 
-#endif
+/* 每份目标报告只被上层消费一次。 */
+perception_status_t perception_take_target_data(perception_target_data_t *data);
+
+/* 摄像头目标切换事务。 */
+perception_status_t perception_request_target_switch(void);
+uint8_t perception_is_target_switch_pending(void);
+uint8_t perception_take_target_switch_ack(void);
+
+/* 车辆偏航角及跨 0/360 度边界的最短角差。 */
+perception_status_t perception_get_vehicle_yaw_deg(float *yaw_deg);
+float perception_shortest_yaw_delta_deg(float reference_deg, float current_deg);
+
+/* 根据当前 Y 舵机角度计算从镜头光心到地面目标点的水平距离。 */
+perception_status_t perception_calculate_horizontal_distance(float y_axis_angle_deg,
+    float *distance_mm);
+
+#endif /* PERCEPTION_H */

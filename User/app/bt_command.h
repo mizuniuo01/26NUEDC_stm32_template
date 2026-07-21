@@ -34,6 +34,7 @@ void on_big_diff_up(void);
 void on_big_diff_down(void);
 void on_motion_start(void);
 void on_motion_stop(void);
+void on_shoot(void);
 void on_target_ang_up(void);
 void on_target_ang_down(void);
 

@@ -58,5 +58,6 @@ void gyro_task(void);
 void gyro_on_camera_frame(void);
 float gyro_get_delta_yaw(void);
 gyro_data_t gyro_get_data(void);
+uint8_t gyro_is_data_valid(void);
 
 #endif

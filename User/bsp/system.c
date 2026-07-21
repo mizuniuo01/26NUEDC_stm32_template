@@ -39,7 +39,6 @@
 #include "encoder.h"
 #include "motion_control.h"
 #include "motion_manager.h"
-#include "perception.h"
 
 /* 系统运行标志位 */
 volatile static uint8_t system_led_flag = 0;
@@ -237,5 +236,4 @@ void system_init(void)
 
     motion_control_init();
     motion_manager_init();
-    perception_init();
 }

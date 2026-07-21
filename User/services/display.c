@@ -17,6 +17,7 @@
 #include "motion_manager.h"
 #include "sensor.h"
 #include "system.h"
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 
@@ -31,6 +32,12 @@ volatile uint8_t display_refresh_flag;
 
 /** @brief 最近一次上报的错误信息。 */
 static char error_message[64];
+
+/** @brief 最近一次有效的水平距离，单位为毫米。 */
+static float display_distance_mm;
+
+/** @brief 水平距离有效标志。 */
+static uint8_t display_distance_valid;
 
 /**
  * @brief  缓存需要在蓝牙显示区域上报的错误信息。
@@ -50,6 +57,32 @@ void display_show_error(const char *format, ...)
     va_start(arguments, format);
     vsnprintf(error_message, sizeof(error_message), format, arguments);
     va_end(arguments);
+}
+
+/**
+ * @brief  更新蓝牙显示使用的有效水平距离。
+ * @param  distance_mm  水平距离，单位为毫米。
+ * @return 无。
+ */
+void display_set_distance(float distance_mm)
+{
+    if (!isfinite(distance_mm) || (distance_mm <= 0.0F)) {
+        display_clear_distance();
+        return;
+    }
+
+    display_distance_mm = distance_mm;
+    display_distance_valid = 1U;
+}
+
+/**
+ * @brief  清除水平距离有效状态。
+ * @return 无。
+ */
+void display_clear_distance(void)
+{
+    display_distance_mm = 0.0F;
+    display_distance_valid = 0U;
 }
 
 /**
@@ -98,6 +131,11 @@ void display_task(void)
     }
 
     blueteeth_display(0, DISPLAY_LINE_2_Y, "Sensor: %s", sensor_string);
+    if (display_distance_valid) {
+        blueteeth_display(0, DISPLAY_LINE_3_Y, "Distance: %.1f mm", display_distance_mm);
+    } else {
+        blueteeth_display(0, DISPLAY_LINE_3_Y, "Distance: -");
+    }
     blueteeth_display(0, DISPLAY_LINE_4_Y, "Gyro: x=%.2f, y=%.2f, z=%.2f", gyro.roll,
         gyro.pitch, gyro.yaw);
     if (cam.has_target) {

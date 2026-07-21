@@ -45,8 +45,6 @@
 #include "bt_command.h"
 #include "motion_control.h"
 #include "motion_manager.h"
-#include "perception.h"
-#include "aim_tools.h"
 #include "aim_control.h"
 /* USER CODE END Includes */
 
@@ -138,6 +136,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
     HAL_TIM_Base_Start_IT(&htim6);
     system_init();
+    (void)aim_control_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -148,6 +147,7 @@ int main(void)
         cam_task();
         gyro_task();
         sensor_task();
+        aim_control_task();
         servo_task();
         motion_manager_task();
         motion_control_task();

@@ -7,6 +7,7 @@
  */
 
 #include "bt_command.h"
+#include "aim_tools.h"
 #include "system.h"
 #include "led.h"
 #include "pid.h"
@@ -207,6 +208,15 @@ void on_motion_start(void)
 void on_motion_stop(void)
 {
     motion_manager_stop();
+}
+
+/**
+ * @brief  通过瞄准工具层启动一次非阻塞射击。
+ * @return 无。
+ */
+void on_shoot(void)
+{
+    (void)aim_tools_shoot();
 }
 
 /* ==================== 目标角度（直接操作 motion_control 共享指针） ==================== */

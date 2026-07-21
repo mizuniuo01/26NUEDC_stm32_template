@@ -44,6 +44,7 @@
 
 static gyro_handle_t gyro_inst;
 static gyro_data_t gyro_data;
+static uint8_t gyro_data_valid;
 
 volatile uint8_t gyro_tick_flag;
 
@@ -77,6 +78,7 @@ void gyro_init(UART_HandleTypeDef *huart)
     gyro_frame_delta_yaw = 0.0f;
     gyro_last_yaw = 0.0f;
     gyro_delta_initialized = 0;
+    gyro_data_valid = 0U;
 
     status = HAL_UARTEx_ReceiveToIdle_DMA(gyro_inst.huart, gyro_inst.dma_rx_buffer,
         GYRO_DMA_RX_BUF_SIZE);
@@ -156,6 +158,7 @@ void gyro_error_callback(UART_HandleTypeDef *huart)
     gyro_delta_initialized = 0;
     gyro_delta_accumulated = 0.0f;
     gyro_frame_delta_yaw = 0.0f;
+    gyro_data_valid = 0U;
 
     memset(gyro_inst.dma_rx_buffer, 0, GYRO_DMA_RX_BUF_SIZE);
     status = HAL_UARTEx_ReceiveToIdle_DMA(gyro_inst.huart, gyro_inst.dma_rx_buffer,
@@ -204,6 +207,7 @@ static void parse_angle_frame(const uint8_t *buf)
     gyro_data.roll = (float)roll_raw / 32768.0f * 180.0f;
     gyro_data.pitch = (float)pitch_raw / 32768.0f * 180.0f;
     gyro_data.yaw = (float)yaw_raw / 32768.0f * 180.0f;
+    gyro_data_valid = 1U;
 }
 
 /**
@@ -347,4 +351,13 @@ float gyro_get_delta_yaw(void)
 gyro_data_t gyro_get_data(void)
 {
     return gyro_data;
+}
+
+/**
+ * @brief  判断是否已经解析到至少一帧合法姿态数据。
+ * @return 已有合法数据返回 1，否则返回 0。
+ */
+uint8_t gyro_is_data_valid(void)
+{
+    return gyro_data_valid;
 }
