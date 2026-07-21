@@ -30,7 +30,6 @@
 #include "system.h"
 #include "error_handler.h"
 #include "blueteeth.h"
-#include "bldc.h"
 #include "buzzer.h"
 #include "cam.h"
 #include "encoder.h"
@@ -64,7 +63,6 @@ typedef enum {
     TICK_GYRO_CNT = 1,  /* 陀螺仪 1ms */
     TICK_SENSOR_CNT = 3,  /* 传感器 3ms */
     TICK_DISPLAY_CNT = 50,  /* 显示刷新 50ms */
-    TICK_BLDC_FEEDBACK_CNT = 10, /* 无刷电机反馈轮询 10ms */
     TICK_ENCODER_CNT = 10, /* 编码器 10ms */
     TICK_MOTION_CONTROL_CNT = 10, /* 底层闭环 10ms */
     TICK_MOTION_MANAGER_CNT = 10, /* 运动管理 10ms */
@@ -83,52 +81,16 @@ typedef enum {
 
 /* USER CODE BEGIN PV */
 
-/* TIM6 ISR 置位，主循环消费的无刷电机反馈请求标志。 */
-static volatile uint8_t bldc_feedback_tick_flag;
-
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
-static void bldc_feedback_request_task(void);
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
-/**
- * @brief  轮询请求 X/Y 无刷电机的各项反馈数据。
- * @return 无。
- * @note   每次 TIM6 节拍只加入一个请求；两个电机和五种反馈约 100ms 轮询一轮。
- */
-static void bldc_feedback_request_task(void)
-{
-    static uint8_t motor_index;
-    static bldc_feedback_type_t feedback_type = BLDC_FEEDBACK_SPEED;
-    bldc_motor_t *motor;
-
-    if (!bldc_feedback_tick_flag) {
-        return;
-    }
-    bldc_feedback_tick_flag = 0U;
-
-    motor = (motor_index == 0U) ? system_bldc_x() : system_bldc_y();
-    if (bldc_request_feedback(motor, feedback_type) != BLDC_STATUS_OK) {
-        return;
-    }
-
-    motor_index++;
-    if (motor_index >= 2U) {
-        motor_index = 0U;
-        feedback_type = (bldc_feedback_type_t)((uint8_t)feedback_type + 1U);
-        if (feedback_type >= BLDC_FEEDBACK_COUNT) {
-            feedback_type = BLDC_FEEDBACK_SPEED;
-        }
-    }
-}
 
 /* USER CODE END 0 */
 
@@ -172,7 +134,6 @@ int main(void)
     MX_I2C3_Init();
     MX_TIM4_Init();
     MX_UART4_Init();
-    MX_USART2_UART_Init();
     MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
     HAL_TIM_Base_Start_IT(&htim6);
@@ -187,11 +148,9 @@ int main(void)
         cam_task();
         gyro_task();
         sensor_task();
+        servo_task();
         motion_manager_task();
         motion_control_task();
-        bldc_task(system_bldc_bus());
-        servo_task();
-        bldc_feedback_request_task();
         blueteeth_task();
         display_task();
     /* USER CODE END WHILE */
@@ -254,7 +213,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
         static uint8_t sensor_tick_cnt = 0;
         static uint8_t encoder_tick_cnt = 0;
         static uint8_t display_tick_cnt = 0;
-        static uint8_t bldc_feedback_tick_cnt = 0;
         static uint8_t motion_control_tick_cnt = 0;
         static uint8_t motion_manager_tick_cnt = 0;
 
@@ -294,13 +252,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
             display_refresh_flag = 1;
         }
 
-    /* 无刷电机反馈轮询标志位 */
-        bldc_feedback_tick_cnt++;
-        if (bldc_feedback_tick_cnt >= TICK_BLDC_FEEDBACK_CNT) {
-            bldc_feedback_tick_cnt = 0;
-            bldc_feedback_tick_flag = 1;
-        }
-
     /* 底层闭环服务标志位 */
         motion_control_tick_cnt++;
         if (motion_control_tick_cnt >= TICK_MOTION_CONTROL_CNT) {
@@ -330,10 +281,6 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
     if (huart->Instance == USART6) {
         gyro_rx_callback(huart, Size);
     }
-
-    if (huart->Instance == USART2) {
-        bldc_rx_callback(system_bldc_bus(), huart, Size);
-    }
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
@@ -344,10 +291,6 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
     if (huart->Instance == USART3) {
         cam_tx_callback(huart);
-    }
-
-    if (huart->Instance == USART2) {
-        bldc_tx_callback(system_bldc_bus(), huart);
     }
 
     if (huart->Instance == UART4) {
@@ -365,8 +308,8 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
         gyro_error_callback(huart);
     }
 
-    if (huart->Instance == USART2) {
-        bldc_error_callback(system_bldc_bus(), huart);
+    if (huart->Instance == UART4) {
+        servo_error_callback(huart);
     }
 }
 

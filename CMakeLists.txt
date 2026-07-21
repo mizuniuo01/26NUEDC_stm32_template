@@ -47,7 +47,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     User/app/bt_command.c
     User/bsp/system.c
-    User/drivers/bldc.c
     User/drivers/blueteeth.c
     User/drivers/buzzer.c
     User/drivers/cam.c

@@ -6,9 +6,9 @@
 /* 驱动头文件（只添加有对应句柄的） */
 #include "led.h"
 #include "buzzer.h"
-#include "bldc.h"
 #include "motor.h"
 #include "pid.h"
+#include "servo.h"
 #include "motion_control.h"
 
 /* GPIO 控制类 */
@@ -21,14 +21,14 @@ buzzer_handle_t *system_buzzer(void);
 /* 驱动 / 执行器类 */
 motor_handle_t *system_motor(void);
 
-/* 获取 F32C 电机共享串口总线实例，调用方不得直接修改其成员。 */
-bldc_bus_t *system_bldc_bus(void);
+/* 获取地址为 0 的扳机舵机实例。 */
+servo_t *system_servo_trigger(void);
 
-/* 获取地址为 1 的云台 X 轴 F32C 电机实例。 */
-bldc_motor_t *system_bldc_x(void);
+/* 获取地址为 1 的云台 X 轴舵机实例。 */
+servo_t *system_servo_x_axis(void);
 
-/* 获取地址为 2 的云台 Y 轴 F32C 电机实例。 */
-bldc_motor_t *system_bldc_y(void);
+/* 获取地址为 12 的云台 Y 轴舵机实例。 */
+servo_t *system_servo_y_axis(void);
 
 /* 算法类 */
 pid_t *system_pid_speed_left(void);
