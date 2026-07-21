@@ -182,12 +182,16 @@ int main(void)
     while (1) {
         system_state();
         error_handler_task();
-        blueteeth_task();
+        cam_task();
+        gyro_task();
+        sensor_task();
+        motion_manager_task();
+        motion_control_task();
         bldc_task(system_bldc_bus());
         servo_task();
         bldc_feedback_request_task();
+        blueteeth_task();
         display_task();
-        servo_move(SERVO_DIRECTION_CLOCKWISE, 90.0f);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

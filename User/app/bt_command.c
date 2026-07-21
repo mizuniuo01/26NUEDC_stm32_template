@@ -99,87 +99,115 @@ void on_spd_kd_down(void)
     pid_set_param(system_pid_speed_right(), &p);
 }
 
-/* ==================== 角度 PID ==================== */
+/* ==================== 循迹运动参数 ==================== */
 
 /**
- * @brief  角度环 KP 增大
- * @param  无
- * @retval 无
+ * @brief  调整指定档位的循迹差速。
+ * @param  level  差速档位。
+ * @param  delta  有符号调整量，单位为 count/10ms。
+ * @return 无。
  */
-void on_ang_kp_up(void)
+static void adjust_motion_diff(motion_manager_diff_level_t level, int16_t delta)
 {
-    pid_param_t p;
-    pid_get_param(system_pid_angle(), &p);
-    p.kp += BLT_STEP_ANG_KP;
-    pid_set_param(system_pid_angle(), &p);
+    int16_t diff;
+
+    diff = motion_manager_get_diff(level);
+    motion_manager_set_diff(level, (int16_t)(diff + delta));
 }
 
 /**
- * @brief  角度环 KP 减小
- * @param  无
- * @retval 无
+ * @brief  增大循迹基础速度。
+ * @return 无。
  */
-void on_ang_kp_down(void)
+void on_base_spd_up(void)
 {
-    pid_param_t p;
-    pid_get_param(system_pid_angle(), &p);
-    p.kp -= BLT_STEP_ANG_KP;
-    pid_set_param(system_pid_angle(), &p);
+    int16_t base_speed = motion_manager_get_base_speed();
+
+    motion_manager_set_base_speed((int16_t)(base_speed + BLT_STEP_BASE_SPD));
 }
 
 /**
- * @brief  角度环 KI 增大
- * @param  无
- * @retval 无
+ * @brief  减小循迹基础速度。
+ * @return 无。
  */
-void on_ang_ki_up(void)
+void on_base_spd_down(void)
 {
-    pid_param_t p;
-    pid_get_param(system_pid_angle(), &p);
-    p.ki += BLT_STEP_ANG_KI;
-    pid_set_param(system_pid_angle(), &p);
+    int16_t base_speed = motion_manager_get_base_speed();
+
+    motion_manager_set_base_speed((int16_t)(base_speed - BLT_STEP_BASE_SPD));
 }
 
 /**
- * @brief  角度环 KI 减小
- * @param  无
- * @retval 无
+ * @brief  增大微偏差速。
+ * @return 无。
  */
-void on_ang_ki_down(void)
+void on_small_diff_up(void)
 {
-    pid_param_t p;
-    pid_get_param(system_pid_angle(), &p);
-    p.ki -= BLT_STEP_ANG_KI;
-    pid_set_param(system_pid_angle(), &p);
+    adjust_motion_diff(MOTION_MANAGER_DIFF_LEVEL_SMALL, BLT_STEP_DIFF);
 }
 
 /**
- * @brief  角度环 KD 增大
- * @param  无
- * @retval 无
+ * @brief  减小微偏差速。
+ * @return 无。
  */
-void on_ang_kd_up(void)
+void on_small_diff_down(void)
 {
-    pid_param_t p;
-    pid_get_param(system_pid_angle(), &p);
-    p.kd += BLT_STEP_ANG_KD;
-    pid_set_param(system_pid_angle(), &p);
+    adjust_motion_diff(MOTION_MANAGER_DIFF_LEVEL_SMALL, -BLT_STEP_DIFF);
 }
 
 /**
- * @brief  角度环 KD 减小
- * @param  无
- * @retval 无
+ * @brief  增大中偏差速。
+ * @return 无。
  */
-void on_ang_kd_down(void)
+void on_medium_diff_up(void)
 {
-    pid_param_t p;
-    pid_get_param(system_pid_angle(), &p);
-    p.kd -= BLT_STEP_ANG_KD;
-    pid_set_param(system_pid_angle(), &p);
+    adjust_motion_diff(MOTION_MANAGER_DIFF_LEVEL_MEDIUM, BLT_STEP_DIFF);
 }
 
-/* ==================== 基础速度（通过 control_manager 结构体） ==================== */
+/**
+ * @brief  减小中偏差速。
+ * @return 无。
+ */
+void on_medium_diff_down(void)
+{
+    adjust_motion_diff(MOTION_MANAGER_DIFF_LEVEL_MEDIUM, -BLT_STEP_DIFF);
+}
+
+/**
+ * @brief  增大大偏差速。
+ * @return 无。
+ */
+void on_big_diff_up(void)
+{
+    adjust_motion_diff(MOTION_MANAGER_DIFF_LEVEL_BIG, BLT_STEP_DIFF);
+}
+
+/**
+ * @brief  减小大偏差速。
+ * @return 无。
+ */
+void on_big_diff_down(void)
+{
+    adjust_motion_diff(MOTION_MANAGER_DIFF_LEVEL_BIG, -BLT_STEP_DIFF);
+}
+
+/**
+ * @brief  启动循迹运动。
+ * @return 无。
+ */
+void on_motion_start(void)
+{
+    motion_manager_start();
+}
+
+/**
+ * @brief  停止循迹运动。
+ * @return 无。
+ */
+void on_motion_stop(void)
+{
+    motion_manager_stop();
+}
 
 /* ==================== 目标角度（直接操作 motion_control 共享指针） ==================== */
 

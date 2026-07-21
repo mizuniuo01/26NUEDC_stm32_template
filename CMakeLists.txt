@@ -65,6 +65,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     User/modules/perception.c
     User/services/display.c
     User/services/error_handler.c
+    User/modules/aim_tools.c
+    User/app/aim_control.c
 )
 
 # Add include paths
