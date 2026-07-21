@@ -47,6 +47,8 @@
 #include "motion_control.h"
 #include "motion_manager.h"
 #include "perception.h"
+#include "aim_tools.h"
+#include "aim_control.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -340,6 +342,10 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
         blueteeth_tx_callback(huart);
     }
 
+    if (huart->Instance == USART3) {
+        cam_tx_callback(huart);
+    }
+
     if (huart->Instance == USART2) {
         bldc_tx_callback(system_bldc_bus(), huart);
     }
@@ -351,6 +357,10 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
+    if (huart->Instance == USART3) {
+        cam_error_callback(huart);
+    }
+
     if (huart->Instance == USART6) {
         gyro_error_callback(huart);
     }

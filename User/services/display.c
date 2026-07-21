@@ -124,8 +124,13 @@ void display_task(void)
     blueteeth_display(0, DISPLAY_LINE_2_Y, "Sensor: %s", sensor_string);
     blueteeth_display(0, DISPLAY_LINE_4_Y, "Gyro: x=%.2f, y=%.2f, z=%.2f", gyro.roll,
         gyro.pitch, gyro.yaw);
-    blueteeth_display(0, DISPLAY_LINE_5_Y, "Cam: J=%d D=%d G=%d dev=%d", cam.is_junction,
-        cam.direction, cam.green, cam.deviation);
+    if (cam.has_target) {
+        blueteeth_display(0, DISPLAY_LINE_5_Y, "Cam: X=%d Y=%d Ack=%u", cam.error_x,
+            cam.error_y, (unsigned int)cam.switch_ack);
+    } else {
+        blueteeth_display(
+            0, DISPLAY_LINE_5_Y, "Cam: X=- Y=- Ack=%u", (unsigned int)cam.switch_ack);
+    }
     blueteeth_display(0, DISPLAY_LINE_6_Y, "Encoder: L=%d, R=%d", encoder_left,
         encoder_right);
     blueteeth_display(0, DISPLAY_LINE_7_Y, "SpdPID: P=%.1f I=%.2f D=%.1f",
