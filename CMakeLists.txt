@@ -44,28 +44,28 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Add user sources here
-    User/app/bt_command.c
-    User/bsp/system.c
-    User/drivers/blueteeth.c
-    User/drivers/buzzer.c
-    User/drivers/cam.c
-    User/drivers/encoder.c
-    User/drivers/gyroscope.c
-    User/drivers/led.c
-    User/drivers/motor.c
-    User/drivers/pwm.c
-    User/drivers/sensor.c
-    User/drivers/servo.c
+    # Refactored bottom-layer test target. Product flows are intentionally excluded.
+    User/app/refactor_smoke.c
+    User/bsp/bsp_board.c
+    User/domain/line_pattern.c
+    User/domain/motion_planner.c
+    User/drivers/driver_encoder.c
+    User/drivers/driver_camera_protocol.c
+    User/drivers/driver_gpio_output.c
+    User/drivers/driver_gyro_protocol.c
+    User/drivers/driver_keys.c
+    User/drivers/driver_motor.c
+    User/drivers/driver_oled.c
+    User/drivers/driver_sensor_mcu.c
+    User/drivers/driver_servo.c
+    User/drivers/driver_stepper.c
+    User/drivers/driver_ultrasonic.c
+    User/drivers/driver_uart_stream.c
+    User/libraries/oled_data.c
+    User/libraries/cascaded_pid.c
     User/libraries/pid.c
-    User/modules/motion_control.c
-    User/modules/motion_manager.c
-    User/modules/pattern.c
-    User/modules/perception.c
-    User/services/display.c
-    User/services/error_handler.c
-    User/modules/aim_tools.c
-    User/app/aim_control.c
+    User/services/command_service.c
+    User/services/error_service.c
 )
 
 # Add include paths
@@ -75,7 +75,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     User/bsp
     User/drivers
     User/libraries
-    User/modules
+    User/domain
     User/services
 )
 

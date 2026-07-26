@@ -1,0 +1,39 @@
+/**
+ * @file status.h
+ * @brief Cross-layer status codes used by the refactored test firmware.
+ */
+#ifndef USER_SERVICES_STATUS_H
+#define USER_SERVICES_STATUS_H
+
+#include <stdint.h>
+
+typedef enum {
+    STATUS_OK = 0,
+    STATUS_INVALID_ARGUMENT = 1,
+    STATUS_NOT_INITIALIZED = 2,
+    STATUS_BUSY = 3,
+    STATUS_TIMEOUT = 4,
+    STATUS_IO_ERROR = 5,
+    STATUS_UNAVAILABLE = 6,
+    STATUS_OUT_OF_RANGE = 7,
+    STATUS_STATE_ERROR = 8
+} status_code_t;
+
+typedef enum {
+    STATUS_SOURCE_BOARD = 0,
+    STATUS_SOURCE_MOTOR,
+    STATUS_SOURCE_ENCODER,
+    STATUS_SOURCE_SENSOR,
+    STATUS_SOURCE_OLED,
+    STATUS_SOURCE_KEY,
+    STATUS_SOURCE_ULTRASONIC,
+    STATUS_SOURCE_BLUETOOTH,
+    STATUS_SOURCE_CAMERA,
+    STATUS_SOURCE_GYRO,
+    STATUS_SOURCE_SERVO,
+    STATUS_SOURCE_STEPPER,
+    STATUS_SOURCE_DOMAIN,
+    STATUS_SOURCE_COUNT
+} status_source_t;
+
+#endif
