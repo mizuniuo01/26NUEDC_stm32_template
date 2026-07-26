@@ -139,10 +139,10 @@ void Error_Handler(void);
 #define sensor6_GPIO_Port GPIOD
 #define sensor7_Pin GPIO_PIN_4
 #define sensor7_GPIO_Port GPIOD
-#define bldc_tx_Pin GPIO_PIN_5
-#define bldc_tx_GPIO_Port GPIOD
-#define bldc_rx_Pin GPIO_PIN_6
-#define bldc_rx_GPIO_Port GPIOD
+#define stepmotor_tx_Pin GPIO_PIN_5
+#define stepmotor_tx_GPIO_Port GPIOD
+#define stepmotor_rx_Pin GPIO_PIN_6
+#define stepmotor_rx_GPIO_Port GPIOD
 
 /* USER CODE BEGIN Private defines */
 
