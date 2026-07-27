@@ -44,12 +44,12 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Refactored bottom-layer test target. Product flows are intentionally excluded.
-    User/app/refactor_smoke.c
+    # Refactored bottom-layer production modules. Product application is added separately.
     User/bsp/bsp_board.c
     User/bsp/bsp_board_stm32_callbacks.c
     User/domain/line_pattern.c
     User/domain/motion_planner.c
+    User/domain/speed_controller.c
     User/drivers/driver_encoder.c
     User/drivers/driver_camera_protocol.c
     User/drivers/driver_gpio_output.c
@@ -66,6 +66,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     User/libraries/cascaded_pid.c
     User/libraries/pid.c
     User/services/command_service.c
+    User/services/bluetooth_service.c
+    User/services/display.c
     User/services/error_service.c
 )
 

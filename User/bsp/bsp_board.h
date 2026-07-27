@@ -17,6 +17,7 @@ typedef struct {
 typedef struct {
     int32_t left_delta;     /* 左轮本周期编码器增量 */
     int32_t right_delta;    /* 右轮本周期编码器增量 */
+    uint32_t sequence;      /* 10 ms 双编码器采样序号 */
     uint32_t timestamp_ms;  /* 采样时间，单位：毫秒 */
 } bsp_feedback_snapshot_t;
 
@@ -39,6 +40,13 @@ typedef struct {
     bool is_valid;           /* 快照有效标志 */
     uint32_t sequence;       /* 视觉数据更新序号 */
 } bsp_camera_snapshot_t;
+
+/* ZDT X42S 步进电机位置命令模式 */
+typedef enum {
+    BSP_STEPPER_MODE_RELATIVE_TARGET = 0x00U, /* 相对上一目标位置 */
+    BSP_STEPPER_MODE_ABSOLUTE = 0x01U,        /* 相对坐标零点 */
+    BSP_STEPPER_MODE_RELATIVE_CURRENT = 0x02U /* 相对当前实时位置 */
+} bsp_stepper_move_mode_t;
 
 /* 姿态角数据快照 */
 typedef struct {
@@ -85,7 +93,8 @@ status_code_t bsp_ultrasonic_get(uint16_t *distance_mm, bool *is_valid);
 /* 执行机构接口 */
 status_code_t bsp_servo_set_angle(uint8_t id, float angle);
 status_code_t bsp_stepper_enable(uint8_t id, bool is_enabled);
-status_code_t bsp_stepper_move(uint8_t id, int32_t pulses, uint16_t speed, bool is_absolute);
+status_code_t bsp_stepper_move(uint8_t id, float angle, uint16_t speed, uint16_t acceleration,
+    bsp_stepper_move_mode_t mode, bool is_synchronized);
 
 /* 通信与感知接口 */
 status_code_t bsp_bluetooth_bind(const char *name, bsp_command_callback_t callback, void *context);
@@ -95,6 +104,7 @@ status_code_t bsp_camera_switch(bool is_enabled, uint8_t request_id);
 status_code_t bsp_gyro_snapshot(bsp_gyro_snapshot_t *snapshot);
 
 /* 板级状态查询接口 */
+uint32_t bsp_time_get_ms(void);
 status_code_t bsp_board_health(bsp_board_health_t *health);
 
 #endif /* AUTO_BALL_CAR_USER_BSP_BSP_BOARD_H */

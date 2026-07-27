@@ -6,59 +6,62 @@
 #include <stddef.h>
 #include <string.h>
 
+/* clang-format off: 初始化命令按 SSD1306 数据手册顺序紧凑排列。 */
+static const uint8_t init_sequence[] = {
+    0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40, 0x8D, 0x14,
+    0x20, 0x02, 0xA1, 0xC8, 0xDA, 0x12, 0x81, 0x7F, 0xD9, 0xF1,
+    0xDB, 0x30, 0xA4, 0xA6, 0xAF,
+};
+/* clang-format on */
+
 /**
- * @brief  通过阻塞 I2C 事务发送一条 SSD1306 命令
- * @param  oled 已配置 I2C 的 OLED 驱动实例
- * @param  command SSD1306 命令字节
- * @retval STATUS_OK 命令发送成功
- * @retval STATUS_IO_ERROR HAL 报告 I2C 发送失败
+ * @brief  启动一次 I2C3 中断发送
+ * @param  oled OLED 驱动实例
+ * @param  length 待发送字节数
+ * @param  transfer 本次发送阶段
+ * @retval STATUS_OK I2C3 中断发送已启动
+ * @retval STATUS_BUSY I2C3 正忙
+ * @retval STATUS_IO_ERROR HAL 无法启动发送
  */
-static status_code_t send_command(driver_oled_t *oled, uint8_t command)
+static status_code_t start_transfer(driver_oled_t *oled, uint16_t length,
+    driver_oled_transfer_t transfer)
 {
-    uint8_t packet[2] = {
-        0x00U,
-        command,
-    };
-    return HAL_I2C_Master_Transmit(oled->config.i2c, oled->config.address, packet, sizeof(packet),
-               20U) == HAL_OK
-               ? STATUS_OK
-               : STATUS_IO_ERROR;
+    HAL_StatusTypeDef result;
+
+    oled->is_busy = true;
+    oled->transfer = transfer;
+    result = HAL_I2C_Master_Transmit_IT(oled->config.i2c, oled->config.address, oled->tx_buffer,
+        length);
+    if (result != HAL_OK) {
+        oled->is_busy = false;
+        oled->transfer = DRIVER_OLED_TRANSFER_IDLE;
+        return result == HAL_BUSY ? STATUS_BUSY : STATUS_IO_ERROR;
+    }
+    return STATUS_OK;
 }
 
 /**
  * @brief  初始化 SSD1306 控制器和驱动状态
  * @param  oled OLED 驱动实例
  * @param  config I2C 句柄和设备地址配置
- * @retval STATUS_OK SSD1306 初始化命令全部发送成功
+ * @retval STATUS_OK SSD1306 异步初始化状态已建立
  * @retval STATUS_INVALID_ARGUMENT 实例、配置或 I2C 句柄为空
- * @retval STATUS_IO_ERROR 任一初始化命令发送失败
  */
 status_code_t driver_oled_init(driver_oled_t *oled, const driver_oled_config_t *config)
 {
-    /* clang-format off: 初始化命令按 SSD1306 数据手册顺序紧凑排列 */
-    static const uint8_t init_sequence[] = {
-        0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40, 0x8D, 0x14,
-        0x20, 0x00, 0xA1, 0xC8, 0xDA, 0x12, 0x81, 0x7F, 0xD9, 0xF1,
-        0xDB, 0x40, 0xA4, 0xA6, 0xAF,
-    };
-    uint8_t i;
-    /* clang-format on */
     if (!oled || !config || !config->i2c) {
         return STATUS_INVALID_ARGUMENT;
     }
     oled->config = *config;
+    oled->transfer = DRIVER_OLED_TRANSFER_IDLE;
     oled->is_busy = false;
     oled->is_refresh_requested = false;
+    oled->is_ready = false;
+    oled->has_fault = false;
+    oled->init_index = 0U;
     oled->page = 0U;
-    oled->remaining_pages = 0U;
     oled->is_initialized = true;
     driver_oled_clear(oled);
-    for (i = 0U; i < sizeof(init_sequence); i++) {
-        if (send_command(oled, init_sequence[i]) != STATUS_OK) {
-            oled->is_initialized = false;
-            return STATUS_IO_ERROR;
-        }
-    }
     return STATUS_OK;
 }
 
@@ -116,11 +119,10 @@ status_code_t driver_oled_refresh(driver_oled_t *oled)
     if (!oled || !oled->is_initialized) {
         return STATUS_NOT_INITIALIZED;
     }
-    if (oled->is_busy || (oled->remaining_pages != 0U)) {
+    if (oled->is_refresh_requested || (oled->page != 0U)) {
         return STATUS_BUSY;
     }
     oled->page = 0U;
-    oled->remaining_pages = 8U;
     oled->is_refresh_requested = true;
     return STATUS_OK;
 }
@@ -128,7 +130,7 @@ status_code_t driver_oled_refresh(driver_oled_t *oled)
 /**
  * @brief  推进一次 OLED 非阻塞分页刷新
  * @param  oled OLED 驱动实例
- * @retval STATUS_OK 当前无需发送或一页 DMA 发送已启动
+ * @retval STATUS_OK 当前无需发送或一次 I2C3 中断发送已启动
  * @retval STATUS_NOT_INITIALIZED 驱动实例为空或尚未初始化
  * @retval STATUS_BUSY I2C 外设正在执行其他事务
  * @retval STATUS_IO_ERROR HAL 无法启动 I2C 中断发送
@@ -136,26 +138,35 @@ status_code_t driver_oled_refresh(driver_oled_t *oled)
 status_code_t driver_oled_process(driver_oled_t *oled)
 {
     size_t offset;
-    HAL_StatusTypeDef result;
 
     if (!oled || !oled->is_initialized) {
         return STATUS_NOT_INITIALIZED;
     }
-    if (oled->is_busy || !oled->is_refresh_requested) {
+    if (oled->has_fault) {
+        return STATUS_IO_ERROR;
+    }
+    if (oled->is_busy) {
         return STATUS_OK;
+    }
+    if (!oled->is_ready) {
+        oled->tx_buffer[0] = 0x00U;
+        oled->tx_buffer[1] = init_sequence[oled->init_index];
+        return start_transfer(oled, 2U, DRIVER_OLED_TRANSFER_INIT);
+    }
+    if (!oled->is_refresh_requested) {
+        return STATUS_OK;
+    }
+    if (oled->transfer != DRIVER_OLED_TRANSFER_PAGE_DATA) {
+        oled->tx_buffer[0] = 0x00U;
+        oled->tx_buffer[1] = (uint8_t)(0xB0U | oled->page);
+        oled->tx_buffer[2] = 0x00U;
+        oled->tx_buffer[3] = 0x10U;
+        return start_transfer(oled, 4U, DRIVER_OLED_TRANSFER_PAGE_COMMAND);
     }
     offset = (size_t)oled->page * DRIVER_OLED_WIDTH_PIXELS;
     oled->tx_buffer[0] = 0x40U;
     (void)memcpy(&oled->tx_buffer[1], &oled->buffer[offset], DRIVER_OLED_WIDTH_PIXELS);
-    oled->is_busy = true;
-    result = HAL_I2C_Master_Transmit_IT(oled->config.i2c, oled->config.address, oled->tx_buffer,
-        sizeof(oled->tx_buffer));
-    if (result != HAL_OK) {
-        oled->is_busy = false;
-        return result == HAL_BUSY ? STATUS_BUSY : STATUS_IO_ERROR;
-    }
-    oled->is_refresh_requested = false;
-    return STATUS_OK;
+    return start_transfer(oled, sizeof(oled->tx_buffer), DRIVER_OLED_TRANSFER_PAGE_DATA);
 }
 
 /**
@@ -170,14 +181,21 @@ void driver_oled_tx_complete_isr(driver_oled_t *oled, I2C_HandleTypeDef *i2c)
         return;
     }
     oled->is_busy = false;
-    if (oled->remaining_pages > 0U) {
-        oled->remaining_pages--;
-    }
-    oled->page++;
-    if (oled->remaining_pages == 0U) {
-        oled->page = 0U;
-    } else {
-        oled->is_refresh_requested = true;
+    if (oled->transfer == DRIVER_OLED_TRANSFER_INIT) {
+        oled->init_index++;
+        if (oled->init_index >= sizeof(init_sequence)) {
+            oled->is_ready = true;
+            oled->transfer = DRIVER_OLED_TRANSFER_IDLE;
+        }
+    } else if (oled->transfer == DRIVER_OLED_TRANSFER_PAGE_COMMAND) {
+        oled->transfer = DRIVER_OLED_TRANSFER_PAGE_DATA;
+    } else if (oled->transfer == DRIVER_OLED_TRANSFER_PAGE_DATA) {
+        oled->page++;
+        oled->transfer = DRIVER_OLED_TRANSFER_IDLE;
+        if (oled->page >= 8U) {
+            oled->page = 0U;
+            oled->is_refresh_requested = false;
+        }
     }
 }
 
@@ -191,7 +209,8 @@ void driver_oled_error_isr(driver_oled_t *oled, I2C_HandleTypeDef *i2c)
     if (oled && i2c && oled->is_initialized &&
         (i2c->Instance == oled->config.i2c->Instance)) {
         oled->is_busy = false;
-        oled->remaining_pages = 0U;
+        oled->transfer = DRIVER_OLED_TRANSFER_IDLE;
         oled->is_refresh_requested = false;
+        oled->has_fault = true;
     }
 }

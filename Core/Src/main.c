@@ -28,7 +28,6 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "bsp_board.h"
-#include "refactor_smoke.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -113,7 +112,6 @@ int main(void)
   if (bsp_board_init() != STATUS_OK) {
     Error_Handler();
   }
-  refactor_smoke_init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -124,7 +122,6 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
     bsp_board_process();
-    refactor_smoke_process();
   }
   /* USER CODE END 3 */
 }

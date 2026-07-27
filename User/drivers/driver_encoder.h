@@ -16,8 +16,8 @@ typedef struct {
 /* 定时器正交编码器实例 */
 typedef struct {
     driver_encoder_config_t config; /* 配置快照 */
-    uint32_t last_count;            /* 上一次采样的定时器计数值 */
-    int32_t delta;                  /* 最近一个周期的有符号计数增量 */
+    volatile uint32_t last_count;   /* ISR 中维护的上一次定时器计数值 */
+    volatile int32_t delta;         /* ISR 发布的最近 10 ms 有符号计数增量 */
     bool is_initialized;            /* 驱动初始化完成标志 */
 } driver_encoder_t;
 

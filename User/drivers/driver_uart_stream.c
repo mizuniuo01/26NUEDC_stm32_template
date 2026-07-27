@@ -94,7 +94,7 @@ status_code_t driver_uart_stream_take(driver_uart_stream_t *stream, uint8_t *dat
 }
 
 /**
- * @brief  复制并异步发送一段串口字节流
+ * @brief  复制并通过 DMA 异步发送一段串口字节流
  * @param  stream 串口数据流实例
  * @param  data 待发送字节序列
  * @param  length 待发送字节数
@@ -102,7 +102,7 @@ status_code_t driver_uart_stream_take(driver_uart_stream_t *stream, uint8_t *dat
  * @retval STATUS_INVALID_ARGUMENT 必需地址为空或数据流尚未初始化
  * @retval STATUS_OUT_OF_RANGE length 超过发送缓冲区容量
  * @retval STATUS_BUSY 上一次串口发送尚未完成
- * @retval STATUS_IO_ERROR HAL 无法启动串口中断发送
+ * @retval STATUS_IO_ERROR 未配置发送 DMA 或 HAL 无法启动 DMA 发送
  */
 status_code_t driver_uart_stream_write(driver_uart_stream_t *stream, const uint8_t *data,
     uint16_t length)
@@ -118,7 +118,8 @@ status_code_t driver_uart_stream_write(driver_uart_stream_t *stream, const uint8
     }
     (void)memcpy(stream->tx_buffer, data, length);
     stream->is_tx_busy = true;
-    if (HAL_UART_Transmit_IT(stream->uart, stream->tx_buffer, length) != HAL_OK) {
+    if (!stream->uart->hdmatx ||
+        (HAL_UART_Transmit_DMA(stream->uart, stream->tx_buffer, length) != HAL_OK)) {
         stream->is_tx_busy = false;
         return STATUS_IO_ERROR;
     }

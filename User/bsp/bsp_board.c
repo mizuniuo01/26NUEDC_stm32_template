@@ -51,8 +51,13 @@ static bool is_board_initialized;
 static uint8_t optional_unavailable_mask;
 /* TIM6 ISR 累加、主循环读取；目标 MCU 已验证对齐 uint32_t 访问原子性。 */
 static volatile uint32_t elapsed_ms;
-static uint32_t next_encoder_ms;
+#if BSP_LINE_SENSOR_ENABLED
 static uint32_t next_sensor_ms;
+#endif
+static volatile uint32_t feedback_sequence;
+static volatile uint32_t feedback_timestamp_ms;
+static volatile uint8_t encoder_elapsed_ms;
+static volatile bool is_encoder_sampling_enabled;
 /* ISR 设置错误来源位，主循环在关中断临界区取走，避免读改写竞争。 */
 static volatile uint32_t pending_error_sources;
 
@@ -68,6 +73,25 @@ static void record(status_source_t source, status_code_t code)
     }
 }
 
+/** @brief 取出一段蓝牙接收数据并推进命令解析。 */
+static void process_bluetooth(void)
+{
+    uint16_t packet_length;
+
+    if (driver_uart_stream_take(&bluetooth_stream, bluetooth_dispatch_buffer,
+            sizeof(bluetooth_dispatch_buffer), &packet_length, NULL) == STATUS_OK) {
+        command_service_push(&bluetooth_commands, bluetooth_dispatch_buffer, packet_length);
+    }
+}
+
+/** @brief 在主循环正常推进时刷新看门狗。 */
+static void refresh_watchdog(void)
+{
+    if (HAL_IWDG_Refresh(&hiwdg) != HAL_OK) {
+        record(STATUS_SOURCE_BOARD, STATUS_IO_ERROR);
+    }
+}
+
 /**
  * @brief  初始化板级必需设备和可选设备
  * @retval STATUS_OK 板级必需设备初始化成功
@@ -76,6 +100,8 @@ static void record(status_source_t source, status_code_t code)
  */
 status_code_t bsp_board_init(void)
 {
+    static const uint8_t servo_ids[] = {BSP_SERVO_ID_1};
+    uint32_t interrupt_mask;
     status_code_t status;
     driver_motor_config_t motor_config = {
         .timer = &htim3,
@@ -151,6 +177,31 @@ status_code_t bsp_board_init(void)
     command_service_init(&bluetooth_commands);
     driver_camera_protocol_init(&camera_protocol);
     driver_gyro_protocol_init(&gyro_protocol);
+    status = driver_uart_stream_init(&bluetooth_stream, &huart1);
+    record(STATUS_SOURCE_BLUETOOTH, status);
+    if (status != STATUS_OK) {
+        optional_unavailable_mask |= 1U << 5U;
+    }
+
+#if BSP_LINE_SENSOR_ENABLED
+    status = driver_sensor_mcu_init(&line_sensor,
+        &(driver_sensor_mcu_config_t){
+            .i2c = &hi2c2,
+            .address = BSP_SENSOR_I2C_ADDRESS_7BIT << 1U,
+            .command = BSP_SENSOR_READ_COMMAND,
+        });
+    record(STATUS_SOURCE_SENSOR, status);
+    if (status != STATUS_OK) {
+        return status;
+    }
+    next_sensor_ms = HAL_GetTick() + BSP_SENSOR_PERIOD_MS;
+#endif
+
+    status = driver_uart_stream_init(&gyro_stream, &huart6);
+    record(STATUS_SOURCE_GYRO, status);
+    if (status != STATUS_OK) {
+        optional_unavailable_mask |= 1U << 7U;
+    }
 
     status = driver_motor_init(&motor, &motor_config);
     record(STATUS_SOURCE_MOTOR, status);
@@ -177,17 +228,13 @@ status_code_t bsp_board_init(void)
     if (status != STATUS_OK) {
         return status;
     }
-    status = driver_sensor_mcu_init(&line_sensor,
-        &(driver_sensor_mcu_config_t){
-            .i2c = &hi2c2,
-            .address = BSP_SENSOR_I2C_ADDRESS_7BIT << 1U,
-            .command = BSP_SENSOR_READ_COMMAND,
-        });
-    record(STATUS_SOURCE_SENSOR, status);
-    if (status != STATUS_OK) {
-        return status;
-    }
-
+    interrupt_mask = __get_PRIMASK();
+    __disable_irq();
+    feedback_sequence = 0U;
+    feedback_timestamp_ms = elapsed_ms;
+    encoder_elapsed_ms = 0U;
+    is_encoder_sampling_enabled = true;
+    __set_PRIMASK(interrupt_mask);
     status = driver_gpio_output_init(&leds, led_pins, 4U);
     record(STATUS_SOURCE_BOARD, status);
     status = driver_gpio_output_init(&buzzer, &buzzer_pin, 1U);
@@ -222,11 +269,10 @@ status_code_t bsp_board_init(void)
     status = driver_servo_init(&servo,
         &(driver_servo_config_t){
             .uart = &huart4,
-            .ids = {BSP_SERVO_ID_BASE, BSP_SERVO_ID_TURRET, BSP_SERVO_ID_AUX,},
-            .count = 3U,
             .interval_ms = BSP_SERVO_INTERVAL_MS,
             .power = BSP_SERVO_POWER,
-        });
+        },
+        servo_ids, (uint8_t)(sizeof(servo_ids) / sizeof(servo_ids[0])));
     if (status != STATUS_OK) {
         optional_unavailable_mask |= 1U << 3U;
         record(STATUS_SOURCE_SERVO, status);
@@ -250,23 +296,11 @@ status_code_t bsp_board_init(void)
         record(STATUS_SOURCE_STEPPER, status);
     }
 
-    status = driver_uart_stream_init(&bluetooth_stream, &huart1);
-    if (status != STATUS_OK) {
-        optional_unavailable_mask |= 1U << 5U;
-        record(STATUS_SOURCE_BLUETOOTH, status);
-    }
     status = driver_uart_stream_init(&camera_stream, &huart3);
     if (status != STATUS_OK) {
         optional_unavailable_mask |= 1U << 6U;
         record(STATUS_SOURCE_CAMERA, status);
     }
-    status = driver_uart_stream_init(&gyro_stream, &huart6);
-    if (status != STATUS_OK) {
-        optional_unavailable_mask |= 1U << 7U;
-        record(STATUS_SOURCE_GYRO, status);
-    }
-    next_encoder_ms = HAL_GetTick() + BSP_ENCODER_PERIOD_MS;
-    next_sensor_ms = HAL_GetTick() + BSP_SENSOR_PERIOD_MS;
     is_board_initialized = true;
     return STATUS_OK;
 }
@@ -292,24 +326,19 @@ void bsp_board_process(void)
             record((status_source_t)source, STATUS_IO_ERROR);
         }
     }
-    (void)elapsed_ms;
-    if ((int32_t)(now - next_encoder_ms) >= 0) {
-        next_encoder_ms = now + BSP_ENCODER_PERIOD_MS;
-        status = driver_encoder_process(&left_encoder);
-        if (status != STATUS_OK) {
-            record(STATUS_SOURCE_ENCODER, status);
-        }
-        status = driver_encoder_process(&right_encoder);
-        if (status != STATUS_OK) {
-            record(STATUS_SOURCE_ENCODER, status);
-        }
-    }
+    process_bluetooth();
+#if BSP_LINE_SENSOR_ENABLED
     if ((int32_t)(now - next_sensor_ms) >= 0) {
         next_sensor_ms = now + BSP_SENSOR_PERIOD_MS;
         status = driver_sensor_mcu_request(&line_sensor);
         if ((status != STATUS_OK) && (status != STATUS_BUSY)) {
             record(STATUS_SOURCE_SENSOR, status);
         }
+    }
+#endif
+    if (driver_uart_stream_take(&gyro_stream, gyro_dispatch_buffer,
+            sizeof(gyro_dispatch_buffer), &packet_length, NULL) == STATUS_OK) {
+        driver_gyro_protocol_push(&gyro_protocol, gyro_dispatch_buffer, packet_length);
     }
     status = driver_keys_process(&keys, now);
     if ((status != STATUS_OK) && (status != STATUS_NOT_INITIALIZED)) {
@@ -319,36 +348,41 @@ void bsp_board_process(void)
     if ((status != STATUS_OK) && (status != STATUS_NOT_INITIALIZED)) {
         record(STATUS_SOURCE_ULTRASONIC, status);
     }
-    if (driver_uart_stream_take(&bluetooth_stream, bluetooth_dispatch_buffer,
-            sizeof(bluetooth_dispatch_buffer), &packet_length, NULL) == STATUS_OK) {
-        command_service_push(&bluetooth_commands, bluetooth_dispatch_buffer, packet_length);
-    }
     if (driver_uart_stream_take(&camera_stream, camera_dispatch_buffer,
             sizeof(camera_dispatch_buffer), &packet_length, NULL) == STATUS_OK) {
         driver_camera_protocol_push(&camera_protocol, camera_dispatch_buffer, packet_length);
-    }
-    if (driver_uart_stream_take(&gyro_stream, gyro_dispatch_buffer, sizeof(gyro_dispatch_buffer),
-            &packet_length, NULL) == STATUS_OK) {
-        driver_gyro_protocol_push(&gyro_protocol, gyro_dispatch_buffer, packet_length);
     }
     status = driver_oled_process(&oled);
     if ((status != STATUS_OK) && (status != STATUS_BUSY) && (status != STATUS_NOT_INITIALIZED)) {
         record(STATUS_SOURCE_OLED, status);
     }
-    /* 只有全部核心设备健康时才刷新看门狗，避免故障被无条件喂狗掩盖。 */
-    if (motor.is_initialized && left_encoder.is_initialized && right_encoder.is_initialized &&
-        line_sensor.is_initialized && line_sensor.is_valid &&
-        ((uint32_t)(now - line_sensor.timestamp_ms) <= BSP_SENSOR_STALE_MS)) {
-        if (HAL_IWDG_Refresh(&hiwdg) != HAL_OK) {
-            record(STATUS_SOURCE_BOARD, STATUS_IO_ERROR);
-        }
-    }
+    /* 看门狗只监督主循环是否持续推，不把业务传感器作为喂狗前置。 */
+    refresh_watchdog();
 }
 
-/** @brief 累加板级周期中断计数。 */
+/** @brief 累加板级时间并在精确 10 ms 节点采样双编码器。 */
 void bsp_board_timer_elapsed_isr(void)
 {
-    elapsed_ms++;
+    status_code_t left_status;
+    status_code_t right_status;
+
+    elapsed_ms += BSP_BOARD_TIMER_PERIOD_MS;
+    if (!is_encoder_sampling_enabled) {
+        return;
+    }
+    encoder_elapsed_ms = (uint8_t)(encoder_elapsed_ms + BSP_BOARD_TIMER_PERIOD_MS);
+    if (encoder_elapsed_ms < BSP_ENCODER_PERIOD_MS) {
+        return;
+    }
+    encoder_elapsed_ms = 0U;
+    left_status = driver_encoder_process(&left_encoder);
+    right_status = driver_encoder_process(&right_encoder);
+    if ((left_status == STATUS_OK) && (right_status == STATUS_OK)) {
+        feedback_sequence++;
+        feedback_timestamp_ms = elapsed_ms;
+    } else {
+        pending_error_sources |= UINT32_C(1) << STATUS_SOURCE_ENCODER;
+    }
 }
 
 /**
@@ -401,6 +435,8 @@ void bsp_board_uart_error_isr(void *uart_handle)
         return;
     }
     driver_servo_error_isr(&servo, uart);
+    driver_stepper_error_isr(&stepper[0], uart);
+    driver_stepper_error_isr(&stepper[1], uart);
     driver_uart_stream_error_isr(&bluetooth_stream, uart);
     driver_uart_stream_error_isr(&camera_stream, uart);
     driver_uart_stream_error_isr(&gyro_stream, uart);
@@ -410,6 +446,8 @@ void bsp_board_uart_error_isr(void *uart_handle)
         pending_error_sources |= UINT32_C(1) << STATUS_SOURCE_CAMERA;
     } else if (uart->Instance == USART6) {
         pending_error_sources |= UINT32_C(1) << STATUS_SOURCE_GYRO;
+    } else if (uart->Instance == USART2) {
+        pending_error_sources |= UINT32_C(1) << STATUS_SOURCE_STEPPER;
     }
 }
 
@@ -495,15 +533,27 @@ status_code_t bsp_drive_set(int16_t left, int16_t right)
  * @param  snapshot 接收反馈数据的存储地址
  * @retval STATUS_OK 快照已写入
  * @retval STATUS_INVALID_ARGUMENT snapshot 为空
+ * @retval STATUS_NOT_INITIALIZED 任一路编码器尚未初始化
  */
 status_code_t bsp_feedback_get(bsp_feedback_snapshot_t *snapshot)
 {
+    uint32_t sequence_before;
+    uint32_t sequence_after;
+
     if (!snapshot) {
         return STATUS_INVALID_ARGUMENT;
     }
-    snapshot->left_delta = driver_encoder_delta(&left_encoder);
-    snapshot->right_delta = driver_encoder_delta(&right_encoder);
-    snapshot->timestamp_ms = HAL_GetTick();
+    if (!left_encoder.is_initialized || !right_encoder.is_initialized) {
+        return STATUS_NOT_INITIALIZED;
+    }
+    do {
+        sequence_before = feedback_sequence;
+        snapshot->left_delta = driver_encoder_delta(&left_encoder);
+        snapshot->right_delta = driver_encoder_delta(&right_encoder);
+        snapshot->timestamp_ms = feedback_timestamp_ms;
+        sequence_after = feedback_sequence;
+    } while (sequence_before != sequence_after);
+    snapshot->sequence = sequence_after;
     return STATUS_OK;
 }
 
@@ -576,7 +626,7 @@ status_code_t bsp_oled_refresh(void)
  * @brief  推进 OLED 非阻塞刷新状态机
  * @retval STATUS_OK 当前无需发送或一页发送已启动
  * @retval STATUS_NOT_INITIALIZED OLED 驱动尚未初始化
- * @retval STATUS_BUSY I2C DMA 正忙
+ * @retval STATUS_BUSY I2C3 正忙
  * @retval STATUS_IO_ERROR OLED 命令或数据发送失败
  */
 status_code_t bsp_oled_process(void)
@@ -676,21 +726,29 @@ status_code_t bsp_stepper_enable(uint8_t id, bool is_enabled)
 /**
  * @brief  向指定步进电机发送位置命令
  * @param  id 步进电机板级 ID，取值为 1 或 2
- * @param  pulses 目标脉冲数，符号表示方向
+ * @param  angle 目标角度，符号表示方向
  * @param  speed 协议速度参数
- * @param  is_absolute 绝对位置模式启用标志
+ * @param  acceleration 协议加速度参数
+ * @param  mode 位置模式
+ * @param  is_synchronized 等待多机同步触发标志
  * @retval STATUS_OK 步进电机命令发送已启动
  * @retval STATUS_OUT_OF_RANGE id 超出支持范围
  * @retval STATUS_NOT_INITIALIZED 步进电机驱动尚未初始化
  * @retval STATUS_BUSY 串口 DMA 正忙
  * @retval STATUS_IO_ERROR 串口 DMA 发送启动失败
  */
-status_code_t bsp_stepper_move(uint8_t id, int32_t pulses, uint16_t speed, bool is_absolute)
+status_code_t bsp_stepper_move(uint8_t id, float angle, uint16_t speed, uint16_t acceleration,
+    bsp_stepper_move_mode_t mode, bool is_synchronized)
 {
     if (id < 1U || id > 2U) {
         return STATUS_OUT_OF_RANGE;
     }
-    return driver_stepper_move(&stepper[id - 1U], pulses, speed, is_absolute);
+    if ((mode != BSP_STEPPER_MODE_RELATIVE_TARGET) && (mode != BSP_STEPPER_MODE_ABSOLUTE) &&
+        (mode != BSP_STEPPER_MODE_RELATIVE_CURRENT)) {
+        return STATUS_OUT_OF_RANGE;
+    }
+    return driver_stepper_move(&stepper[id - 1U], angle, speed, acceleration,
+        (driver_stepper_move_mode_t)mode, is_synchronized);
 }
 
 /**
@@ -789,6 +847,15 @@ status_code_t bsp_gyro_snapshot(bsp_gyro_snapshot_t *snapshot)
     snapshot->is_valid = attitude.is_valid;
     snapshot->sequence = attitude.sequence;
     return status;
+}
+
+/**
+ * @brief  获取板级单调毫秒时间
+ * @return 自启动以来经过的毫秒数，允许自然回绕
+ */
+uint32_t bsp_time_get_ms(void)
+{
+    return HAL_GetTick();
 }
 
 /**

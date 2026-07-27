@@ -4,6 +4,9 @@
  */
 #include "driver_ultrasonic.h"
 
+#define DRIVER_ULTRASONIC_TRIGGER_TICKS 10U /* TIM4 1 MHz 下的 10 us 触发脉宽 */
+#define DRIVER_ULTRASONIC_ECHO_TIMEOUT_MS 40U /* 超出最大测距后恢复上升沿捕获 */
+
 /**
  * @brief  初始化 HC-SR04 驱动并启动回波输入捕获
  * @param  ultrasonic 超声波驱动实例
@@ -23,7 +26,10 @@ status_code_t driver_ultrasonic_init(driver_ultrasonic_t *ultrasonic,
     ultrasonic->distance_mm = 0U;
     ultrasonic->is_waiting_for_fall = false;
     ultrasonic->is_valid = false;
+    ultrasonic->trigger_started_count = 0U;
+    ultrasonic->echo_started_ms = 0U;
     ultrasonic->last_trigger_ms = 0U;
+    ultrasonic->is_trigger_high = false;
     ultrasonic->is_initialized = true;
     HAL_GPIO_WritePin(config->trigger_port, config->trigger_pin, GPIO_PIN_RESET);
     return HAL_TIM_IC_Start_IT(config->timer, config->channel) == HAL_OK ? STATUS_OK
@@ -39,17 +45,39 @@ status_code_t driver_ultrasonic_init(driver_ultrasonic_t *ultrasonic,
  */
 status_code_t driver_ultrasonic_process(driver_ultrasonic_t *ultrasonic, uint32_t now_ms)
 {
+    uint16_t counter;
+
     if (!ultrasonic || !ultrasonic->is_initialized) {
         return STATUS_NOT_INITIALIZED;
     }
-    if ((uint32_t)(now_ms - ultrasonic->last_trigger_ms) >= ultrasonic->config.trigger_period_ms) {
+    if (ultrasonic->is_trigger_high) {
+        counter = (uint16_t)__HAL_TIM_GET_COUNTER(ultrasonic->config.timer);
+        if ((uint16_t)(counter - ultrasonic->trigger_started_count) >=
+            DRIVER_ULTRASONIC_TRIGGER_TICKS) {
+            HAL_GPIO_WritePin(ultrasonic->config.trigger_port, ultrasonic->config.trigger_pin,
+                GPIO_PIN_RESET);
+            ultrasonic->is_trigger_high = false;
+        }
+        return STATUS_OK;
+    }
+    if (ultrasonic->is_waiting_for_fall &&
+        ((uint32_t)(now_ms - ultrasonic->echo_started_ms) >=
+            DRIVER_ULTRASONIC_ECHO_TIMEOUT_MS)) {
+        ultrasonic->is_waiting_for_fall = false;
+        ultrasonic->is_valid = false;
+        __HAL_TIM_SET_CAPTUREPOLARITY(ultrasonic->config.timer, ultrasonic->config.channel,
+            TIM_INPUTCHANNELPOLARITY_RISING);
+    }
+    if (!ultrasonic->is_waiting_for_fall &&
+        ((uint32_t)(now_ms - ultrasonic->last_trigger_ms) >=
+            ultrasonic->config.trigger_period_ms)) {
         ultrasonic->last_trigger_ms = now_ms;
+        ultrasonic->trigger_started_count =
+            (uint16_t)__HAL_TIM_GET_COUNTER(ultrasonic->config.timer);
+        ultrasonic->is_valid = false;
         HAL_GPIO_WritePin(ultrasonic->config.trigger_port, ultrasonic->config.trigger_pin,
             GPIO_PIN_SET);
-        /* 触发引脚会在下一次周期处理时恢复低电平。 */
-    } else {
-        HAL_GPIO_WritePin(ultrasonic->config.trigger_port, ultrasonic->config.trigger_pin,
-            GPIO_PIN_RESET);
+        ultrasonic->is_trigger_high = true;
     }
     return STATUS_OK;
 }
@@ -73,6 +101,7 @@ void driver_ultrasonic_capture_isr(driver_ultrasonic_t *ultrasonic, TIM_HandleTy
     capture = HAL_TIM_ReadCapturedValue(timer, channel);
     if (!ultrasonic->is_waiting_for_fall) {
         ultrasonic->rising_capture = capture;
+        ultrasonic->echo_started_ms = HAL_GetTick();
         ultrasonic->is_waiting_for_fall = true;
         __HAL_TIM_SET_CAPTUREPOLARITY(timer, channel, TIM_INPUTCHANNELPOLARITY_FALLING);
     } else {

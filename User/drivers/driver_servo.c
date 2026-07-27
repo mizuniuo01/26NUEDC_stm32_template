@@ -3,21 +3,27 @@
  * @brief 编码并异步发送 FashionStar 总线舵机角度命令。
  */
 #include "driver_servo.h"
+#include <string.h>
 
 /**
  * @brief  初始化 FashionStar 总线舵机驱动
  * @param  servo 舵机驱动实例
- * @param  config 串口、允许 ID、动作时间和功率配置
+ * @param  config 串口、动作时间和功率配置
+ * @param  ids 待注册的舵机 ID 数组
+ * @param  count ids 中的有效数量
  * @retval STATUS_OK 驱动已初始化
  * @retval STATUS_INVALID_ARGUMENT 参数或串口句柄为空，或 ID 数量超出容量
  */
-status_code_t driver_servo_init(driver_servo_t *servo, const driver_servo_config_t *config)
+status_code_t driver_servo_init(driver_servo_t *servo, const driver_servo_config_t *config,
+    const uint8_t *ids, uint8_t count)
 {
-    if (!servo || !config || !config->uart || (config->count == 0U) ||
-        (config->count > 3U)) {
+    if (!servo || !config || !config->uart || !ids || (count == 0U) ||
+        (count > DRIVER_SERVO_CAPACITY)) {
         return STATUS_INVALID_ARGUMENT;
     }
     servo->config = *config;
+    (void)memcpy(servo->ids, ids, (size_t)count * sizeof(servo->ids[0]));
+    servo->count = count;
     servo->is_busy = false;
     servo->is_initialized = true;
     return STATUS_OK;
@@ -28,7 +34,7 @@ status_code_t driver_servo_init(driver_servo_t *servo, const driver_servo_config
  * @param  servo 舵机驱动实例
  * @param  id 舵机总线 ID
  * @param  angle 目标角度，单位：度，范围 [-180, 180]
- * @retval STATUS_OK 串口中断发送已启动
+ * @retval STATUS_OK 串口中断发送已启动（UART4 未配置 DMA）
  * @retval STATUS_NOT_INITIALIZED 驱动实例为空或尚未初始化
  * @retval STATUS_BUSY 上一次串口发送尚未完成
  * @retval STATUS_OUT_OF_RANGE id 未登记或角度超出范围
@@ -47,8 +53,8 @@ status_code_t driver_servo_set_angle(driver_servo_t *servo, uint8_t id, float an
     if (servo->is_busy) {
         return STATUS_BUSY;
     }
-    for (i = 0U; i < servo->config.count; i++) {
-        if (servo->config.ids[i] == id) {
+    for (i = 0U; i < servo->count; i++) {
+        if (servo->ids[i] == id) {
             has_known_id = true;
             break;
         }

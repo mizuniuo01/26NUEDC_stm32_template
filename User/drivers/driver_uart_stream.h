@@ -8,7 +8,7 @@
 
 #define DRIVER_UART_STREAM_BUFFER_CAPACITY 128U /* 单次收发缓冲区容量，单位：字节 */
 
-/* DMA 接收到空闲串口流驱动实例 */
+/* DMA 收发串口流驱动实例 */
 /* 串口回调写接收快照，主循环在关中断临界区取走；发送忙标志按 bool 原子访问。 */
 typedef struct {
     UART_HandleTypeDef *uart;                         /* CubeMX 生成的串口句柄 */

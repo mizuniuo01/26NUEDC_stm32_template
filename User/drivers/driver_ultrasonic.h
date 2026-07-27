@@ -23,7 +23,10 @@ typedef struct {
     volatile uint16_t distance_mm;     /* 最近一次有效距离，单位：毫米 */
     volatile bool is_waiting_for_fall; /* 等待回波下降沿标志 */
     volatile bool is_valid;            /* 最近一次距离有效标志 */
+    uint16_t trigger_started_count;    /* 触发高电平起始的 1 MHz 计数 */
+    uint32_t echo_started_ms;          /* 回波上升沿到达时间，单位：毫秒 */
     uint32_t last_trigger_ms;           /* 最近一次触发时间，单位：毫秒 */
+    bool is_trigger_high;               /* 触发引脚正处于高电平标志 */
     bool is_initialized;               /* 驱动初始化完成标志 */
 } driver_ultrasonic_t;
 
