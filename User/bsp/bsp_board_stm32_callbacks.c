@@ -7,6 +7,7 @@
 #include "i2c.h"
 #include "tim.h"
 #include "usart.h"
+#include "stm32f407xx.h"
 
 /**
  * @brief  将 TIM6 周期事件转发到板级时间基准
