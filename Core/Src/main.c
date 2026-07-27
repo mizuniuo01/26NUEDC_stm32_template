@@ -27,7 +27,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "bsp_board.h"
+#include "app.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -109,7 +109,7 @@ int main(void)
   if (HAL_TIM_Base_Start_IT(&htim6) != HAL_OK) {
     Error_Handler();
   }
-  if (bsp_board_init() != STATUS_OK) {
+  if (app_init() != STATUS_OK) {
     Error_Handler();
   }
   /* USER CODE END 2 */
@@ -121,7 +121,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    bsp_board_process();
+    app_run_once();
   }
   /* USER CODE END 3 */
 }

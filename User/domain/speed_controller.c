@@ -115,6 +115,73 @@ status_code_t speed_controller_stop(speed_controller_t *controller)
 }
 
 /**
+ * @brief  读取左右速度环共用的 PID 参数
+ * @param  controller 已初始化的速度闭环实例
+ * @param  parameters 接收共同 PID 参数的存储地址
+ * @retval STATUS_OK 参数已写入
+ * @retval STATUS_INVALID_ARGUMENT 任一参数为空
+ * @retval STATUS_NOT_INITIALIZED 速度闭环尚未初始化
+ * @retval STATUS_STATE_ERROR 左右速度环当前参数不一致
+ */
+status_code_t speed_controller_get_common_speed_pid(const speed_controller_t *controller,
+    pid_param_t *parameters)
+{
+    const pid_param_t *left;
+    const pid_param_t *right;
+
+    if (!controller || !parameters) {
+        return STATUS_INVALID_ARGUMENT;
+    }
+    if (!controller->is_initialized) {
+        return STATUS_NOT_INITIALIZED;
+    }
+    left = &controller->cascaded_pid.config.left_speed_pid;
+    right = &controller->cascaded_pid.config.right_speed_pid;
+    if ((left->kp != right->kp) || (left->ki != right->ki) || (left->kd != right->kd) ||
+        (left->out_max != right->out_max) ||
+        (left->integral_max != right->integral_max)) {
+        return STATUS_STATE_ERROR;
+    }
+    *parameters = *left;
+    return STATUS_OK;
+}
+
+/**
+ * @brief  原子更新左右速度环的共同 PID 参数并清除历史状态
+ * @param  controller 已初始化的速度闭环实例
+ * @param  parameters 待同步到左右速度环的 PID 参数
+ * @retval STATUS_OK 左右速度环已同步且动态历史已清除
+ * @retval STATUS_INVALID_ARGUMENT 参数为空或 PID 数值不满足领域约束
+ * @retval STATUS_NOT_INITIALIZED 速度闭环尚未初始化
+ * @retval STATUS_STATE_ERROR 串级 PID 拒绝了整体配置
+ */
+status_code_t speed_controller_apply_common_speed_pid(speed_controller_t *controller,
+    const pid_param_t *parameters)
+{
+    cascaded_pid_config_t config;
+    cascaded_pid_status_t status;
+
+    if (!controller || !parameters) {
+        return STATUS_INVALID_ARGUMENT;
+    }
+    if (!controller->is_initialized) {
+        return STATUS_NOT_INITIALIZED;
+    }
+    config = controller->cascaded_pid.config;
+    config.left_speed_pid = *parameters;
+    config.right_speed_pid = *parameters;
+    status = cascaded_pid_set_config(&controller->cascaded_pid, &config);
+    if (status == CASCADED_PID_STATUS_INVALID_CONFIG) {
+        return STATUS_INVALID_ARGUMENT;
+    }
+    if (status != CASCADED_PID_STATUS_OK) {
+        return STATUS_STATE_ERROR;
+    }
+    controller->output = (speed_controller_output_t){0};
+    return STATUS_OK;
+}
+
+/**
  * @brief  使用一份新的 10 ms 编码器反馈计算双轮 PWM
  * @param  controller 已启动的速度闭环实例
  * @param  feedback 本周期双编码器反馈

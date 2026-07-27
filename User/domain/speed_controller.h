@@ -36,6 +36,10 @@ status_code_t speed_controller_init(speed_controller_t *controller,
     const cascaded_pid_config_t *config);
 status_code_t speed_controller_start(speed_controller_t *controller, float target);
 status_code_t speed_controller_stop(speed_controller_t *controller);
+status_code_t speed_controller_get_common_speed_pid(const speed_controller_t *controller,
+    pid_param_t *parameters);
+status_code_t speed_controller_apply_common_speed_pid(speed_controller_t *controller,
+    const pid_param_t *parameters);
 status_code_t speed_controller_step(speed_controller_t *controller,
     const speed_controller_feedback_t *feedback, speed_controller_output_t *output);
 status_code_t speed_controller_get_output(const speed_controller_t *controller,

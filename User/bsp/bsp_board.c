@@ -118,15 +118,11 @@ status_code_t bsp_board_init(void)
         .max_compare = BSP_MOTOR_PWM_PERIOD_TICKS,
         .minimum_effective_compare = BSP_MOTOR_PWM_DEAD_ZONE_TICKS,
     };
+    /* PCB 按键 1–4 与 CubeMX key1–key4 标签反序，BSP 在此统一物理编号。 */
     driver_key_pin_t key_pins[DRIVER_KEYS_COUNT] = {
         {
-            .port = key1_GPIO_Port,
-            .pin = key1_Pin,
-            .active_level = GPIO_PIN_RESET,
-        },
-        {
-            .port = key2_GPIO_Port,
-            .pin = key2_Pin,
+            .port = key4_GPIO_Port,
+            .pin = key4_Pin,
             .active_level = GPIO_PIN_RESET,
         },
         {
@@ -135,8 +131,13 @@ status_code_t bsp_board_init(void)
             .active_level = GPIO_PIN_RESET,
         },
         {
-            .port = key4_GPIO_Port,
-            .pin = key4_Pin,
+            .port = key2_GPIO_Port,
+            .pin = key2_Pin,
+            .active_level = GPIO_PIN_RESET,
+        },
+        {
+            .port = key1_GPIO_Port,
+            .pin = key1_Pin,
             .active_level = GPIO_PIN_RESET,
         },
         {
@@ -632,6 +633,31 @@ status_code_t bsp_oled_refresh(void)
 status_code_t bsp_oled_process(void)
 {
     return driver_oled_process(&oled);
+}
+
+/**
+ * @brief  查询 OLED 显存是否可由唯一上层所有者开始绘制新帧
+ * @param  is_ready 接收显存可写且无待发送帧的标志
+ * @retval STATUS_OK 就绪状态已写入
+ * @retval STATUS_INVALID_ARGUMENT is_ready 为空
+ * @retval STATUS_UNAVAILABLE OLED 驱动尚未初始化
+ * @retval STATUS_IO_ERROR OLED 已进入异步传输故障状态
+ */
+status_code_t bsp_oled_frame_ready(bool *is_ready)
+{
+    if (!is_ready) {
+        return STATUS_INVALID_ARGUMENT;
+    }
+    if (!oled.is_initialized) {
+        return STATUS_UNAVAILABLE;
+    }
+    if (oled.has_fault) {
+        *is_ready = false;
+        return STATUS_IO_ERROR;
+    }
+    *is_ready = oled.is_ready && !oled.is_busy && !oled.is_refresh_requested &&
+                (oled.transfer == DRIVER_OLED_TRANSFER_IDLE) && (oled.page == 0U);
+    return STATUS_OK;
 }
 
 /**

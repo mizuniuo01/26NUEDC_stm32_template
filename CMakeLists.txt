@@ -44,7 +44,8 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 
 # Add sources to executable
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-    # Refactored bottom-layer production modules. Product application is added separately.
+    # Refactored production modules and the application composition root.
+    User/app/app.c
     User/bsp/bsp_board.c
     User/bsp/bsp_board_stm32_callbacks.c
     User/domain/line_pattern.c
@@ -69,6 +70,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     User/services/bluetooth_service.c
     User/services/display.c
     User/services/error_service.c
+    User/services/menu_service.c
+    User/services/parameter_service.c
 )
 
 # Add include paths

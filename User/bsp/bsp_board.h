@@ -85,6 +85,7 @@ status_code_t bsp_oled_clear(void);
 status_code_t bsp_oled_set_pixel(uint8_t x, uint8_t y, bool is_on);
 status_code_t bsp_oled_refresh(void);
 status_code_t bsp_oled_process(void);
+status_code_t bsp_oled_frame_ready(bool *is_ready);
 status_code_t bsp_led_set(uint8_t mask);
 status_code_t bsp_buzzer_set(bool is_active);
 status_code_t bsp_keys_get(uint8_t *state, uint8_t *pressed_events);

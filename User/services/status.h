@@ -30,6 +30,7 @@ typedef enum {
     STATUS_SOURCE_GYRO,         /* 姿态传感器通信链路 */
     STATUS_SOURCE_SERVO,        /* 总线舵机驱动 */
     STATUS_SOURCE_STEPPER,      /* 步进电机驱动 */
+    STATUS_SOURCE_MENU,         /* OLED 菜单与本地参数交互 */
     STATUS_SOURCE_DOMAIN,       /* 领域逻辑 */
     STATUS_SOURCE_COUNT,        /* 来源枚举成员数量 */
 } status_source_t;
