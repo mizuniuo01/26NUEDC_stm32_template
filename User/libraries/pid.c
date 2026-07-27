@@ -1,40 +1,32 @@
 /**
  * @file    pid.c
- * @brief   PID 控制器模块（微分-on-实际值）
+ * @brief   采用对实际值微分的 PID 控制器算法
  * @note    纯算法模块，无硬件依赖
  * @note    微分项作用在实际值上，避免目标突变导致微分尖峰
  * @note    含积分饱和限幅和输出限幅
  * @note    参数非法时安全返回，不产生跨层错误上报副作用
- *
- * @usage
- * pid_t pid;
- * pid_init(&pid, 1.5f, 0.1f, 0.05f, 500.0f, 200.0f);
- * float out = pid_calc(&pid, target, actual);
- * pid_clear(&pid);
- *
- * PID 是纯逻辑对象，由所属服务或领域对象直接持有，不依赖 BSP 句柄。
+ * @note    PID 是纯逻辑对象，由所属服务或领域对象直接持有，不依赖 BSP 句柄
  */
-
 #include "pid.h"
 
 /**
  * @brief  PID 初始化
  * @param  pid           PID 句柄指针
- * @param  p             比例系数
- * @param  i             积分系数
- * @param  d             微分系数
+ * @param  kp            比例系数
+ * @param  ki            积分系数
+ * @param  kd            微分系数
  * @param  out_max       输出限幅
  * @param  integral_max  积分饱和限幅
  */
-void pid_init(pid_t *pid, float p, float i, float d, float out_max, float integral_max)
+void pid_init(pid_t *pid, float kp, float ki, float kd, float out_max, float integral_max)
 {
     if (!pid) {
         return;
     }
 
-    pid->kp = p;
-    pid->ki = i;
-    pid->kd = d;
+    pid->kp = kp;
+    pid->ki = ki;
+    pid->kd = kd;
 
     pid->target = 0.0f;
     pid->actual = 0.0f;
@@ -87,7 +79,7 @@ void pid_get_param(const pid_t *pid, pid_param_t *param)
 }
 
 /**
- * @brief  PID 计算（微分-on-实际值）
+ * @brief  采用对实际值微分的方式执行一次 PID 计算
  * @param  pid     PID 句柄指针
  * @param  target  目标值
  * @param  actual  实际值
@@ -116,8 +108,8 @@ float pid_calc(pid_t *pid, float target, float actual)
     }
 
     /* 微分-on-实际值，避免目标突变尖峰 */
-    pid->out = pid->kp * pid->error + pid->ki * pid->integral +
-               pid->kd * (pid->actual_last - pid->actual);
+    pid->out =
+        pid->kp * pid->error + pid->ki * pid->integral + pid->kd * (pid->actual_last - pid->actual);
 
     pid->error_last = pid->error;
     pid->actual_last = pid->actual;

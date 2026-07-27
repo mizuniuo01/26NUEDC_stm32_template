@@ -1,27 +1,23 @@
-/**
- * @file bsp_board_config.h
- * @brief Centralized board device parameters.
- */
-#ifndef USER_BSP_BSP_BOARD_CONFIG_H
-#define USER_BSP_BSP_BOARD_CONFIG_H
+#ifndef AUTO_BALL_CAR_USER_BSP_BSP_BOARD_CONFIG_H
+#define AUTO_BALL_CAR_USER_BSP_BSP_BOARD_CONFIG_H /* 头文件保护 */
 
-#define BSP_SENSOR_I2C_ADDRESS_7BIT 0x4CU
-#define BSP_SENSOR_READ_COMMAND 0xDDU
-#define BSP_OLED_I2C_ADDRESS_HAL 0x78U
-#define BSP_MOTOR_PWM_PERIOD 1000U
-#define BSP_MOTOR_PWM_DEADZONE 30U
-#define BSP_SENSOR_PERIOD_MS 3U
-#define BSP_SENSOR_STALE_MS 100U
-#define BSP_ENCODER_PERIOD_MS 10U
-#define BSP_KEY_DEBOUNCE_MS 20U
-#define BSP_ULTRASONIC_PERIOD_MS 60U
+#define BSP_SENSOR_I2C_ADDRESS_7BIT 0x4CU /* 巡线传感器的 7 位 I2C 地址 */
+#define BSP_SENSOR_READ_COMMAND 0xDDU /* 巡线传感器读取命令 */
+#define BSP_OLED_I2C_ADDRESS_HAL 0x78U /* HAL 接口使用的 OLED 左移一位地址 */
+#define BSP_MOTOR_PWM_PERIOD_TICKS 1000U /* 电机 PWM 计数周期，单位：计数 */
+#define BSP_MOTOR_PWM_DEAD_ZONE_TICKS 30U /* 电机最小有效 PWM 比较值，单位：计数 */
+#define BSP_SENSOR_PERIOD_MS 3U /* 巡线传感器请求周期，单位：毫秒 */
+#define BSP_SENSOR_STALE_MS 100U /* 巡线传感器数据失效时间，单位：毫秒 */
+#define BSP_ENCODER_PERIOD_MS 10U /* 编码器采样周期，单位：毫秒 */
+#define BSP_KEY_DEBOUNCE_MS 20U /* 按键消抖时间，单位：毫秒 */
+#define BSP_ULTRASONIC_PERIOD_MS 60U /* 超声波触发周期，单位：毫秒 */
 
-#define BSP_SERVO_ID_BASE 0U
-#define BSP_SERVO_ID_TURRET 1U
-#define BSP_SERVO_ID_AUX 12U
-#define BSP_SERVO_INTERVAL_MS 1000U
-#define BSP_SERVO_POWER 0U
-#define BSP_STEPPER_ID_LEFT 1U
-#define BSP_STEPPER_ID_RIGHT 2U
+#define BSP_SERVO_ID_BASE 0U /* 底座舵机总线 ID */
+#define BSP_SERVO_ID_TURRET 1U /* 云台舵机总线 ID */
+#define BSP_SERVO_ID_AUX 12U /* 辅助舵机总线 ID */
+#define BSP_SERVO_INTERVAL_MS 1000U /* 舵机默认动作时间，单位：毫秒 */
+#define BSP_SERVO_POWER 0U /* 舵机命令使用的默认功率参数 */
+#define BSP_STEPPER_ID_LEFT 1U /* 左侧步进电机总线 ID */
+#define BSP_STEPPER_ID_RIGHT 2U /* 右侧步进电机总线 ID */
 
-#endif
+#endif /* AUTO_BALL_CAR_USER_BSP_BSP_BOARD_CONFIG_H */

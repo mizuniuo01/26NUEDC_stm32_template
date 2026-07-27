@@ -47,6 +47,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Refactored bottom-layer test target. Product flows are intentionally excluded.
     User/app/refactor_smoke.c
     User/bsp/bsp_board.c
+    User/bsp/bsp_board_stm32_callbacks.c
     User/domain/line_pattern.c
     User/domain/motion_planner.c
     User/drivers/driver_encoder.c

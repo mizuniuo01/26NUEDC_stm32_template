@@ -2,10 +2,9 @@
  * @file    oled_data.c
  * @brief   OLED ASCII 字模数据（6×8 和 8×16 点阵）
  */
-
 #include "oled_data.h"
 
-/* clang-format off: 字模字节必须与字符索引逐行对应 */
+/* clang-format off: 字模数据按字符和点阵行紧凑对应，自动换行会破坏视觉校对关系 */
 /* 8×16 ASCII 字模，95 个可打印字符（0x20~0x7E） */
 const uint8_t oled_font_8x16[][16] = {
     {0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,

@@ -15,6 +15,23 @@ User/app/      极薄的 refactor_smoke，只验证能力，不驱动产品动�
 
 驱动不公开 HAL 句柄给上层；BSP 只公开语义能力，例如 `bsp_drive_set`、`bsp_line_sensor_get` 和 `bsp_oled_refresh`。所有状态码由驱动产生，错误服务只记录事件，不直接刷新显示器。
 
+## CubeMX 生成边界
+
+`AutoBallCar.ioc` 是 MCU 引脚、时钟和外设配置的唯一权威来源。`Core/` 除 `Core/Src/main.c`
+中的 CubeMX 用户区外，不接受手工业务改动；外设配置变化必须先修改 `.ioc`，再由 CubeMX 重新生成。
+
+`main.c` 只承担组合根入口，项目代码必须限制在以下用户区：
+
+- `USER CODE BEGIN Includes`：包含 BSP 和 Application 公共头文件。
+- `USER CODE BEGIN 2`：启动定时器、初始化 BSP 和 Application。
+- `USER CODE BEGIN 3`：推进 BSP 和 Application 主循环。
+
+HAL 回调实现在 `User/bsp/bsp_board_stm32_callbacks.c`，由该平台适配文件有界转发给 BSP，
+不占用 `main.c` 的 `USER CODE BEGIN 4` 区域。
+
+不得改写 `main()` 生成骨架、外设初始化列表、`SystemClock_Config()` 或用户区以外的生成代码。每次
+CubeMX 重新生成后，必须检查上述入口仍然存在并完成一次构建验证。
+
 ## 本板绑定
 
 | 能力 | `.ioc` 资源 | 约束 |

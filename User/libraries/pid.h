@@ -1,5 +1,5 @@
-#ifndef DRIVER_LIBRARY_COMMON_LIBRARIES_PID_H
-#define DRIVER_LIBRARY_COMMON_LIBRARIES_PID_H
+#ifndef AUTO_BALL_CAR_USER_LIBRARIES_PID_H
+#define AUTO_BALL_CAR_USER_LIBRARIES_PID_H /* 头文件保护 */
 
 #include <stdint.h>
 
@@ -32,10 +32,13 @@ typedef struct {
     float integral_max; /* 积分限幅 */
 } pid_t;
 
-void pid_init(pid_t *pid, float p, float i, float d, float out_max, float integral_max);
+/* 生命周期与参数接口 */
+void pid_init(pid_t *pid, float kp, float ki, float kd, float out_max, float integral_max);
 void pid_set_param(pid_t *pid, const pid_param_t *param);
 void pid_get_param(const pid_t *pid, pid_param_t *param);
+
+/* 控制计算与动态状态接口 */
 float pid_calc(pid_t *pid, float target, float actual);
 void pid_clear(pid_t *pid);
 
-#endif /* DRIVER_LIBRARY_COMMON_LIBRARIES_PID_H */
+#endif /* AUTO_BALL_CAR_USER_LIBRARIES_PID_H */
