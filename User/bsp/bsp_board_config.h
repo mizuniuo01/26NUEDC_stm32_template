@@ -5,8 +5,10 @@
 #define BSP_SENSOR_READ_COMMAND 0xDDU /* 巡线传感器读取命令 */
 #define BSP_LINE_SENSOR_ENABLED 0U /* 暂停巡线传感器初始化和周期访问 */
 #define BSP_OLED_I2C_ADDRESS_HAL 0x78U /* HAL 接口使用的 OLED 左移一位地址 */
-#define BSP_MOTOR_PWM_PERIOD_TICKS 1000U /* 电机 PWM 计数周期，单位：计数 */
-#define BSP_MOTOR_PWM_DEAD_ZONE_TICKS 30U /* 电机最小有效 PWM 比较值，单位：计数 */
+#define BSP_MOTOR_COMMAND_LIMIT 1000 /* 上层电机命令对称限幅，单位：千分比 */
+#define BSP_MOTOR_PWM_PRESCALER 0U /* TIM3 预分频寄存器值，零表示不分频 */
+#define BSP_MOTOR_PWM_PERIOD_TICKS 4200U /* 20 kHz 电机 PWM 计数周期，单位：计数 */
+#define BSP_MOTOR_PWM_DEAD_ZONE_TICKS 126U /* 约 3% 电机最小有效比较值，单位：计数 */
 #define BSP_SENSOR_PERIOD_MS 3U /* 巡线传感器请求周期，单位：毫秒 */
 #define BSP_SENSOR_STALE_MS 100U /* 巡线传感器数据失效时间，单位：毫秒 */
 #define BSP_BOARD_TIMER_PERIOD_MS 1U /* TIM6 板级时间基准周期，单位：毫秒 */

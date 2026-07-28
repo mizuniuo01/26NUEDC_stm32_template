@@ -17,8 +17,8 @@ typedef struct {
     float target; /* 双轮共同目标，单位：count/10ms */
     float left_actual; /* 左轮反馈，单位：count/10ms */
     float right_actual; /* 右轮反馈，单位：count/10ms */
-    float left_output; /* 左轮 PWM 比较值 */
-    float right_output; /* 右轮 PWM 比较值 */
+    float left_output; /* 左轮千分比输出，正负 1000 对应满占空比 */
+    float right_output; /* 右轮千分比输出，正负 1000 对应满占空比 */
 } speed_controller_output_t;
 
 /* 仅启用串级控制器速度内环的领域对象 */

@@ -61,6 +61,11 @@ static volatile bool is_encoder_sampling_enabled;
 /* ISR 设置错误来源位，主循环在关中断临界区取走，避免读改写竞争。 */
 static volatile uint32_t pending_error_sources;
 
+_Static_assert(BSP_MOTOR_PWM_PERIOD_TICKS <= INT16_MAX,
+    "motor PWM compare must fit in int16_t");
+_Static_assert(BSP_MOTOR_PWM_DEAD_ZONE_TICKS <= BSP_MOTOR_PWM_PERIOD_TICKS,
+    "motor PWM dead zone must not exceed the period");
+
 /**
  * @brief  记录一次非成功状态
  * @param  source 状态来源模块
@@ -93,10 +98,31 @@ static void refresh_watchdog(void)
 }
 
 /**
+ * @brief  将千分比电机命令换算为当前 TIM3 周期的有符号比较值
+ * @param  command 上层有符号命令，范围超出正负 1000 时先钳制
+ * @return 适配 BSP_MOTOR_PWM_PERIOD_TICKS 的有符号比较值
+ */
+static int16_t scale_drive_command(int16_t command)
+{
+    int32_t limited_command = command;
+    int32_t scaled_compare;
+
+    if (limited_command > BSP_MOTOR_COMMAND_LIMIT) {
+        limited_command = BSP_MOTOR_COMMAND_LIMIT;
+    } else if (limited_command < -BSP_MOTOR_COMMAND_LIMIT) {
+        limited_command = -BSP_MOTOR_COMMAND_LIMIT;
+    }
+    scaled_compare = limited_command * (int32_t)BSP_MOTOR_PWM_PERIOD_TICKS /
+                     BSP_MOTOR_COMMAND_LIMIT;
+    return (int16_t)scaled_compare;
+}
+
+/**
  * @brief  初始化板级必需设备和可选设备
  * @retval STATUS_OK 板级必需设备初始化成功
  * @retval STATUS_INVALID_ARGUMENT 必需设备配置不合法
  * @retval STATUS_IO_ERROR 必需外设启动失败
+ * @retval STATUS_STATE_ERROR TIM3 预分频或自动重装值与 BSP 电机配置不一致
  */
 status_code_t bsp_board_init(void)
 {
@@ -204,6 +230,11 @@ status_code_t bsp_board_init(void)
         optional_unavailable_mask |= 1U << 7U;
     }
 
+    if ((htim3.Init.Prescaler != BSP_MOTOR_PWM_PRESCALER) ||
+        (__HAL_TIM_GET_AUTORELOAD(&htim3) != (BSP_MOTOR_PWM_PERIOD_TICKS - 1U))) {
+        record(STATUS_SOURCE_MOTOR, STATUS_STATE_ERROR);
+        return STATUS_STATE_ERROR;
+    }
     status = driver_motor_init(&motor, &motor_config);
     record(STATUS_SOURCE_MOTOR, status);
     if (status != STATUS_OK) {
@@ -517,16 +548,16 @@ status_code_t bsp_drive_disable(void)
     return driver_motor_disable(&motor);
 }
 /**
- * @brief  设置左右底盘电机的有符号 PWM 目标
- * @param  left 左电机目标比较值，符号表示方向
- * @param  right 右电机目标比较值，符号表示方向
+ * @brief  设置左右底盘电机的有符号千分比目标
+ * @param  left 左电机目标，正负 1000 对应正反向满占空比
+ * @param  right 右电机目标，正负 1000 对应正反向满占空比
  * @retval STATUS_OK 输出已更新
  * @retval STATUS_NOT_INITIALIZED 电机驱动尚未初始化
  * @retval STATUS_STATE_ERROR 电机输出尚未使能
  */
 status_code_t bsp_drive_set(int16_t left, int16_t right)
 {
-    return driver_motor_set(&motor, left, right);
+    return driver_motor_set(&motor, scale_drive_command(left), scale_drive_command(right));
 }
 
 /**

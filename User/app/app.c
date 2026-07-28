@@ -252,7 +252,7 @@ static const parameter_service_descriptor_t speed_pid_parameters[] = {
     {
         .id = APP_PARAMETER_SPEED_OUTPUT,
         .name = "Output",
-        .unit = "pwm",
+        .unit = "0.1%",
         .type = SCALAR_VALUE_FLOAT,
         .minimum = {.type = SCALAR_VALUE_FLOAT, .data.float_value = 1.0F},
         .maximum = {.type = SCALAR_VALUE_FLOAT, .data.float_value = 1000.0F},
