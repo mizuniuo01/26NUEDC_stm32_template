@@ -4,7 +4,7 @@
 
 验证结果：全部通过
 
-本记录对应正式启用的 Parameter Service、Menu Service、AutoBallCar Application 适配和 OLED
+本记录对应正式启用的 Parameter Service、Menu Service、26NUEDC_stm32_template Application 适配和 OLED
 异步刷新路径。开发期间使用的临时主机测试代码已在完整上板验证后删除，不进入正式工程。
 
 ## 按键映射

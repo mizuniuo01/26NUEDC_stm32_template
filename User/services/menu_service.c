@@ -24,7 +24,7 @@
  *       调用 bsp_board_process()，再调用 menu_service_process()。
  * @note menu_service_process() 不使用阻塞延时；按键长按、连发、通知和刷新周期全部由注入的
  *       可回绕 uint32_t 毫秒时钟推进。Debug/Live 刷新周期和按键时序均由配置显式给出。
- * @note 当前 AutoBallCar 适配的按键、OLED、参数编辑和实时数据已完成上板验证，验证范围与
+ * @note 当前 26NUEDC_stm32_template 适配的按键、OLED、参数编辑和实时数据已完成上板验证，验证范围与
  *       PCB/CubeMX 按键映射记录在 docs/MENU_SERVICE_VALIDATION.md。
  * @warning 本服务只能在协作式主循环或任务上下文调用，不允许从 ISR 调用，也不阻塞等待。
  * @warning 服务会直接格式化并绘制注册名称。名称、单位和格式化结果必须适合 128×64 布局；

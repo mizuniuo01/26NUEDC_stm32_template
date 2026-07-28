@@ -1,6 +1,6 @@
 /**
  * @file app.c
- * @brief 组合 AutoBallCar 的板级能力、速度控制器、参数服务和 OLED 菜单。
+ * @brief 组合 26NUEDC_stm32_template 的板级能力、速度控制器、参数服务和 OLED 菜单。
  * @note 本文件是当前固件的系统 Composition Root。main.c 只负责 CubeMX 平台启动、
  *       启动 TIM6 后调用 app_init()，并在无限循环中调用 app_run_once()。
  * @note app_init() 依次初始化 BSP、唯一速度控制器、Parameter Service 和 Menu Service。

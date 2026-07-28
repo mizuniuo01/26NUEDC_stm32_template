@@ -1,6 +1,6 @@
-# AutoBallCar 底层重构架构说明
+# 26NUEDC_stm32_template 底层重构架构说明
 
-本工程是基于 `AutoBallCar.ioc` 的底层重构基线。默认构建交付已验证的 Driver、BSP、
+本工程是基于 `26NUEDC_stm32_template.ioc` 的底层重构基线。默认构建交付已验证的 Driver、BSP、
 Services、Domain 和 Libraries，并由 `User/app/app.c` 组合当前可运行功能；不携带临时上板
 测试编排。
 
@@ -19,7 +19,7 @@ User/app/      产品组合根、服务注册表、BSP 端口适配和主循环�
 
 ## CubeMX 生成边界
 
-`AutoBallCar.ioc` 是 MCU 引脚、时钟和外设配置的唯一权威来源。`Core/` 除 `Core/Src/main.c`
+`26NUEDC_stm32_template.ioc` 是 MCU 引脚、时钟和外设配置的唯一权威来源。`Core/` 除 `Core/Src/main.c`
 中的 CubeMX 用户区外，不接受手工业务改动；外设配置变化必须先修改 `.ioc`，再由 CubeMX 重新生成。
 
 `main.c` 只承担组合根入口，项目代码必须限制在以下用户区：
@@ -88,7 +88,7 @@ PID 参数对应的物理占空比。BSP 启动时校验 TIM3 ARR 必须为 4199
 `parameter_service_adjust_by_id()` 按全局稳定 ID 访问，不依赖菜单排列顺序。
 
 `User/services/menu_service.c` 是无板卡绑定的服务。Application 注入单调时间、五键状态和
-OLED 像素端口，当前 AutoBallCar 适配全部集中在 `User/app/app.c`。OLED 显存由菜单独占，
+OLED 像素端口，当前 26NUEDC_stm32_template 适配全部集中在 `User/app/app.c`。OLED 显存由菜单独占，
 上一帧异步发送期间 `bsp_oled_frame_ready()` 返回未就绪，菜单不会清屏或修改显存。
 
 菜单默认进入 Debug 模式，K5 在 Debug/Live 间切换。Debug 保留“参数组 → 参数 → 数值/步长”
