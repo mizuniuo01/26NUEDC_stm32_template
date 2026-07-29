@@ -21,19 +21,12 @@
  *       避免不可用设备在高速主循环中淹没固定容量诊断缓冲区。
  * @warning app_init() 和 app_run_once() 只能在主循环任务上下文调用，不允许从 ISR 调用。
  */
-#ifndef APP_STEPPER_HARDWARE_TEST_ENABLED
-#define APP_STEPPER_HARDWARE_TEST_ENABLED 0U /* 非测试构建默认关闭步进电机硬件测试 */
-#endif /* APP_STEPPER_HARDWARE_TEST_ENABLED */
-
 #include "app.h"
 #include "bsp_board.h"
 #include "error_service.h"
 #include "menu_service.h"
 #include "parameter_service.h"
 #include "speed_controller.h"
-#if APP_STEPPER_HARDWARE_TEST_ENABLED
-#include "stepper_hardware_test.h"
-#endif /* APP_STEPPER_HARDWARE_TEST_ENABLED */
 #include <stddef.h>
 
 #define APP_DEBUG_REFRESH_PERIOD_MS 250U /* 调试页周期同步时间，单位：毫秒 */
@@ -97,9 +90,6 @@ static speed_controller_t speed_controller;
 static parameter_service_t parameter_service;
 static menu_service_t menu_service;
 static status_code_t last_menu_status;
-#if APP_STEPPER_HARDWARE_TEST_ENABLED
-static status_code_t last_stepper_test_status;
-#endif /* APP_STEPPER_HARDWARE_TEST_ENABLED */
 
 static app_speed_pid_context_t speed_kp_context = {.field = APP_SPEED_PID_FIELD_KP};
 static app_speed_pid_context_t speed_ki_context = {.field = APP_SPEED_PID_FIELD_KI};
@@ -600,13 +590,6 @@ status_code_t app_init(void)
         return status;
     }
     last_menu_status = STATUS_OK;
-#if APP_STEPPER_HARDWARE_TEST_ENABLED
-    status = stepper_hardware_test_init();
-    if (status != STATUS_OK) {
-        return status;
-    }
-    last_stepper_test_status = STATUS_OK;
-#endif /* APP_STEPPER_HARDWARE_TEST_ENABLED */
     return STATUS_OK;
 }
 
@@ -623,11 +606,4 @@ void app_run_once(void)
         error_service_record(STATUS_SOURCE_MENU, status, bsp_time_get_ms());
     }
     last_menu_status = status;
-#if APP_STEPPER_HARDWARE_TEST_ENABLED
-    status = stepper_hardware_test_process();
-    if ((status != STATUS_OK) && (status != last_stepper_test_status)) {
-        error_service_record(STATUS_SOURCE_STEPPER, status, bsp_time_get_ms());
-    }
-    last_stepper_test_status = status;
-#endif /* APP_STEPPER_HARDWARE_TEST_ENABLED */
 }

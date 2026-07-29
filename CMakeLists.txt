@@ -12,8 +12,6 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 
-option(ENABLE_STEPPER_HARDWARE_TEST "Enable Bluetooth-controlled ZDT X42S hardware test" ON)
-
 # Define the build type
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Debug")
@@ -74,16 +72,6 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     User/services/menu_service.c
     User/services/parameter_service.c
 )
-
-if(ENABLE_STEPPER_HARDWARE_TEST)
-    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-        tests/stepper_hardware_test.c
-    )
-    target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE tests)
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE APP_STEPPER_HARDWARE_TEST_ENABLED=1)
-else()
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE APP_STEPPER_HARDWARE_TEST_ENABLED=0)
-endif()
 
 # Add include paths
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
