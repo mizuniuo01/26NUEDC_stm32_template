@@ -4,10 +4,12 @@
  */
 #include "driver_stepper.h"
 
-#define DRIVER_STEPPER_COMMAND_MOVE 0xFDU
-#define DRIVER_STEPPER_CHECKSUM 0x6BU
-#define DRIVER_STEPPER_MAX_SPEED 30000U
-#define DRIVER_STEPPER_ANGLE_SCALE 100.0
+#define DRIVER_STEPPER_COMMAND_MOVE 0xFDU /* X 固件梯形曲线位置命令 */
+#define DRIVER_STEPPER_COMMAND_ENABLE 0xF3U /* X 固件电机使能命令 */
+#define DRIVER_STEPPER_ENABLE_AUXILIARY 0xABU /* 使能命令固定辅助码 */
+#define DRIVER_STEPPER_CHECKSUM 0x6BU /* 固定通讯校验字节 */
+#define DRIVER_STEPPER_MAX_SPEED 30000U /* 速度上限，单位 0.1 RPM */
+#define DRIVER_STEPPER_ANGLE_SCALE 100.0 /* 角度转 0.1 度计数的比例 */
 
 /**
  * @brief  异步发送已经编码到实例缓冲区中的步进电机命令
@@ -41,12 +43,16 @@ static status_code_t send(driver_stepper_t *stepper, uint8_t length)
  * @param  stepper 步进电机驱动实例
  * @param  config 串口句柄和电机总线 ID 配置
  * @retval STATUS_OK 驱动已初始化
- * @retval STATUS_INVALID_ARGUMENT 实例、配置或串口句柄为空
+ * @retval STATUS_INVALID_ARGUMENT 实例、配置、串口句柄为空或地址为广播地址 0
+ * @retval STATUS_IO_ERROR 串口未配置 TX DMA
  */
 status_code_t driver_stepper_init(driver_stepper_t *stepper, const driver_stepper_config_t *config)
 {
-    if (!stepper || !config || !config->uart) {
+    if (!stepper || !config || !config->uart || (config->id == 0U)) {
         return STATUS_INVALID_ARGUMENT;
+    }
+    if (!config->uart->hdmatx) {
+        return STATUS_IO_ERROR;
     }
     stepper->config = *config;
     stepper->is_busy = false;
@@ -56,19 +62,34 @@ status_code_t driver_stepper_init(driver_stepper_t *stepper, const driver_steppe
 }
 
 /**
- * @brief  更新步进电机的软件使能状态
+ * @brief  通过 X 固件 F3 AB 命令更新步进电机使能状态
  * @param  stepper 步进电机驱动实例
- * @param  is_enabled 软件使能标志
- * @retval STATUS_OK 软件使能状态已更新
+ * @param  is_enabled 目标使能状态；未接 EN 脚时也通过 UART 生效
+ * @retval STATUS_OK 使能命令的 UART DMA 发送已启动
  * @retval STATUS_NOT_INITIALIZED 驱动实例为空或尚未初始化
+ * @retval STATUS_BUSY 上一条串口命令尚未发送完成
+ * @retval STATUS_IO_ERROR 未配置发送 DMA 或 HAL 无法启动 DMA 发送
  */
 status_code_t driver_stepper_enable(driver_stepper_t *stepper, bool is_enabled)
 {
+    status_code_t status;
+
     if (!stepper || !stepper->is_initialized) {
         return STATUS_NOT_INITIALIZED;
     }
-    stepper->is_enabled = is_enabled;
-    return STATUS_OK;
+    /* 手册 5.3.2：Addr F3 AB 00/01 00 6B。同步标志固定为立即执行。 */
+    stepper->tx_buffer[0] = stepper->config.id;
+    stepper->tx_buffer[1] = DRIVER_STEPPER_COMMAND_ENABLE;
+    stepper->tx_buffer[2] = DRIVER_STEPPER_ENABLE_AUXILIARY;
+    stepper->tx_buffer[3] = is_enabled ? 0x01U : 0x00U;
+    stepper->tx_buffer[4] = 0x00U;
+    stepper->tx_buffer[5] = DRIVER_STEPPER_CHECKSUM;
+    status = send(stepper, 6U);
+    if (status == STATUS_OK) {
+        /* 只有 HAL 接受了命令后才更新软件状态，避免 DMA 忙时状态漂移。 */
+        stepper->is_enabled = is_enabled;
+    }
+    return status;
 }
 
 /**
@@ -99,14 +120,14 @@ status_code_t driver_stepper_move(driver_stepper_t *stepper, float angle, uint16
     if (!stepper->is_enabled) {
         return STATUS_STATE_ERROR;
     }
-    if ((mode != DRIVER_STEPPER_MODE_RELATIVE_TARGET) &&
-        (mode != DRIVER_STEPPER_MODE_ABSOLUTE) &&
+    if ((mode != DRIVER_STEPPER_MODE_RELATIVE_TARGET) && (mode != DRIVER_STEPPER_MODE_ABSOLUTE) &&
         (mode != DRIVER_STEPPER_MODE_RELATIVE_CURRENT)) {
         return STATUS_OUT_OF_RANGE;
     }
     absolute_angle = angle < 0.0F ? -(double)angle : (double)angle;
     scaled_angle = absolute_angle * DRIVER_STEPPER_ANGLE_SCALE;
-    if ((angle != angle) || (scaled_angle < 0.5) || (scaled_angle > (double)UINT32_MAX)) {
+    /* 手册位置字段是无符号 0.1° 计数，0° 是合法的零位/无动作位置。 */
+    if ((angle != angle) || (scaled_angle < 0.0) || (scaled_angle > ((double)UINT32_MAX - 0.5))) {
         return STATUS_OUT_OF_RANGE;
     }
     if (speed > DRIVER_STEPPER_MAX_SPEED) {

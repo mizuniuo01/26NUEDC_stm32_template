@@ -18,7 +18,7 @@
 #define BSP_SERVO_ID_1 12U /* 当前注册的舵机 ID */
 #define BSP_SERVO_INTERVAL_MS 1000U /* 舵机默认动作时间，单位：毫秒 */
 #define BSP_SERVO_POWER 0U /* 舵机命令使用的默认功率参数 */
-#define BSP_STEPPER_ID_LEFT 1U /* 左侧步进电机总线 ID */
-#define BSP_STEPPER_ID_RIGHT 2U /* 右侧步进电机总线 ID */
+#define BSP_STEPPER_COUNT 1U /* 当前安装的 ZDT X42S 数量 */
+#define BSP_STEPPER_ID 1U /* 当前唯一 ZDT X42S 的总线 ID */
 
 #endif /* AUTO_BALL_CAR_USER_BSP_BSP_BOARD_CONFIG_H */

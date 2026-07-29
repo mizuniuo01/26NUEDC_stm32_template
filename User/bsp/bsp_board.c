@@ -34,7 +34,7 @@ static driver_oled_t oled;
 static driver_keys_t keys;
 static driver_ultrasonic_t ultrasonic;
 static driver_servo_t servo;
-static driver_stepper_t stepper[2];
+static driver_stepper_t stepper[BSP_STEPPER_COUNT];
 static driver_gpio_output_bank_t leds;
 static driver_gpio_output_bank_t buzzer;
 static driver_uart_stream_t bluetooth_stream;
@@ -61,10 +61,12 @@ static volatile bool is_encoder_sampling_enabled;
 /* ISR 设置错误来源位，主循环在关中断临界区取走，避免读改写竞争。 */
 static volatile uint32_t pending_error_sources;
 
-_Static_assert(BSP_MOTOR_PWM_PERIOD_TICKS <= INT16_MAX,
-    "motor PWM compare must fit in int16_t");
+_Static_assert(BSP_MOTOR_PWM_PERIOD_TICKS <= INT16_MAX, "motor PWM compare must fit in int16_t");
 _Static_assert(BSP_MOTOR_PWM_DEAD_ZONE_TICKS <= BSP_MOTOR_PWM_PERIOD_TICKS,
     "motor PWM dead zone must not exceed the period");
+_Static_assert(BSP_STEPPER_COUNT == 1U, "current board has one stepper motor");
+_Static_assert((BSP_STEPPER_ID >= 1U) && (BSP_STEPPER_ID <= BSP_STEPPER_COUNT),
+    "stepper ID must index the configured stepper array");
 
 /**
  * @brief  记录一次非成功状态
@@ -112,8 +114,8 @@ static int16_t scale_drive_command(int16_t command)
     } else if (limited_command < -BSP_MOTOR_COMMAND_LIMIT) {
         limited_command = -BSP_MOTOR_COMMAND_LIMIT;
     }
-    scaled_compare = limited_command * (int32_t)BSP_MOTOR_PWM_PERIOD_TICKS /
-                     BSP_MOTOR_COMMAND_LIMIT;
+    scaled_compare =
+        limited_command * (int32_t)BSP_MOTOR_PWM_PERIOD_TICKS / BSP_MOTOR_COMMAND_LIMIT;
     return (int16_t)scaled_compare;
 }
 
@@ -211,12 +213,11 @@ status_code_t bsp_board_init(void)
     }
 
 #if BSP_LINE_SENSOR_ENABLED
-    status = driver_sensor_mcu_init(&line_sensor,
-        &(driver_sensor_mcu_config_t){
-            .i2c = &hi2c2,
-            .address = BSP_SENSOR_I2C_ADDRESS_7BIT << 1U,
-            .command = BSP_SENSOR_READ_COMMAND,
-        });
+    status = driver_sensor_mcu_init(&line_sensor, &(driver_sensor_mcu_config_t){
+                                                      .i2c = &hi2c2,
+                                                      .address = BSP_SENSOR_I2C_ADDRESS_7BIT << 1U,
+                                                      .command = BSP_SENSOR_READ_COMMAND,
+                                                  });
     record(STATUS_SOURCE_SENSOR, status);
     if (status != STATUS_OK) {
         return status;
@@ -240,22 +241,20 @@ status_code_t bsp_board_init(void)
     if (status != STATUS_OK) {
         return status;
     }
-    status = driver_encoder_init(&left_encoder,
-        &(driver_encoder_config_t){
-            .timer = &htim2,
-            .sign = -1,
-            .counter_bits = 32U,
-        });
+    status = driver_encoder_init(&left_encoder, &(driver_encoder_config_t){
+                                                    .timer = &htim2,
+                                                    .sign = -1,
+                                                    .counter_bits = 32U,
+                                                });
     record(STATUS_SOURCE_ENCODER, status);
     if (status != STATUS_OK) {
         return status;
     }
-    status = driver_encoder_init(&right_encoder,
-        &(driver_encoder_config_t){
-            .timer = &htim1,
-            .sign = 1,
-            .counter_bits = 16U,
-        });
+    status = driver_encoder_init(&right_encoder, &(driver_encoder_config_t){
+                                                     .timer = &htim1,
+                                                     .sign = 1,
+                                                     .counter_bits = 16U,
+                                                 });
     record(STATUS_SOURCE_ENCODER, status);
     if (status != STATUS_OK) {
         return status;
@@ -272,11 +271,10 @@ status_code_t bsp_board_init(void)
     status = driver_gpio_output_init(&buzzer, &buzzer_pin, 1U);
     record(STATUS_SOURCE_BOARD, status);
 
-    status = driver_oled_init(&oled,
-        &(driver_oled_config_t){
-            .i2c = &hi2c3,
-            .address = BSP_OLED_I2C_ADDRESS_HAL,
-        });
+    status = driver_oled_init(&oled, &(driver_oled_config_t){
+                                         .i2c = &hi2c3,
+                                         .address = BSP_OLED_I2C_ADDRESS_HAL,
+                                     });
     if (status != STATUS_OK) {
         optional_unavailable_mask |= 1U << 0U;
         record(STATUS_SOURCE_OLED, status);
@@ -286,14 +284,13 @@ status_code_t bsp_board_init(void)
         optional_unavailable_mask |= 1U << 1U;
         record(STATUS_SOURCE_KEY, status);
     }
-    status = driver_ultrasonic_init(&ultrasonic,
-        &(driver_ultrasonic_config_t){
-            .timer = &htim4,
-            .channel = TIM_CHANNEL_4,
-            .trigger_port = ultratrig_GPIO_Port,
-            .trigger_pin = ultratrig_Pin,
-            .trigger_period_ms = BSP_ULTRASONIC_PERIOD_MS,
-        });
+    status = driver_ultrasonic_init(&ultrasonic, &(driver_ultrasonic_config_t){
+                                                     .timer = &htim4,
+                                                     .channel = TIM_CHANNEL_4,
+                                                     .trigger_port = ultratrig_GPIO_Port,
+                                                     .trigger_pin = ultratrig_Pin,
+                                                     .trigger_period_ms = BSP_ULTRASONIC_PERIOD_MS,
+                                                 });
     if (status != STATUS_OK) {
         optional_unavailable_mask |= 1U << 2U;
         record(STATUS_SOURCE_ULTRASONIC, status);
@@ -309,25 +306,14 @@ status_code_t bsp_board_init(void)
         optional_unavailable_mask |= 1U << 3U;
         record(STATUS_SOURCE_SERVO, status);
     }
-    status = driver_stepper_init(&stepper[0],
-        &(driver_stepper_config_t){
-            .uart = &huart2,
-            .id = BSP_STEPPER_ID_LEFT,
-        });
+    status = driver_stepper_init(&stepper[0], &(driver_stepper_config_t){
+                                                  .uart = &huart2,
+                                                  .id = BSP_STEPPER_ID,
+                                              });
     if (status != STATUS_OK) {
         optional_unavailable_mask |= 1U << 4U;
         record(STATUS_SOURCE_STEPPER, status);
     }
-    status = driver_stepper_init(&stepper[1],
-        &(driver_stepper_config_t){
-            .uart = &huart2,
-            .id = BSP_STEPPER_ID_RIGHT,
-        });
-    if (status != STATUS_OK) {
-        optional_unavailable_mask |= 1U << 4U;
-        record(STATUS_SOURCE_STEPPER, status);
-    }
-
     status = driver_uart_stream_init(&camera_stream, &huart3);
     if (status != STATUS_OK) {
         optional_unavailable_mask |= 1U << 6U;
@@ -368,8 +354,8 @@ void bsp_board_process(void)
         }
     }
 #endif
-    if (driver_uart_stream_take(&gyro_stream, gyro_dispatch_buffer,
-            sizeof(gyro_dispatch_buffer), &packet_length, NULL) == STATUS_OK) {
+    if (driver_uart_stream_take(&gyro_stream, gyro_dispatch_buffer, sizeof(gyro_dispatch_buffer),
+            &packet_length, NULL) == STATUS_OK) {
         driver_gyro_protocol_push(&gyro_protocol, gyro_dispatch_buffer, packet_length);
     }
     status = driver_keys_process(&keys, now);
@@ -450,7 +436,6 @@ void bsp_board_uart_tx_complete_isr(void *uart_handle)
     }
     driver_servo_tx_complete_isr(&servo, uart);
     driver_stepper_tx_complete_isr(&stepper[0], uart);
-    driver_stepper_tx_complete_isr(&stepper[1], uart);
     driver_uart_stream_tx_complete_isr(&bluetooth_stream, uart);
     driver_uart_stream_tx_complete_isr(&camera_stream, uart);
     driver_uart_stream_tx_complete_isr(&gyro_stream, uart);
@@ -468,7 +453,6 @@ void bsp_board_uart_error_isr(void *uart_handle)
     }
     driver_servo_error_isr(&servo, uart);
     driver_stepper_error_isr(&stepper[0], uart);
-    driver_stepper_error_isr(&stepper[1], uart);
     driver_uart_stream_error_isr(&bluetooth_stream, uart);
     driver_uart_stream_error_isr(&camera_stream, uart);
     driver_uart_stream_error_isr(&gyro_stream, uart);
@@ -764,7 +748,7 @@ status_code_t bsp_servo_set_angle(uint8_t id, float angle)
 
 /**
  * @brief  设置指定步进电机的使能状态
- * @param  id 步进电机板级 ID，取值为 1 或 2
+ * @param  id 步进电机板级 ID，当前仅支持 1
  * @param  is_enabled 步进电机使能标志
  * @retval STATUS_OK 步进电机命令发送已启动
  * @retval STATUS_OUT_OF_RANGE id 超出支持范围
@@ -774,7 +758,7 @@ status_code_t bsp_servo_set_angle(uint8_t id, float angle)
  */
 status_code_t bsp_stepper_enable(uint8_t id, bool is_enabled)
 {
-    if (id < 1U || id > 2U) {
+    if (id != BSP_STEPPER_ID) {
         return STATUS_OUT_OF_RANGE;
     }
     return driver_stepper_enable(&stepper[id - 1U], is_enabled);
@@ -782,10 +766,10 @@ status_code_t bsp_stepper_enable(uint8_t id, bool is_enabled)
 
 /**
  * @brief  向指定步进电机发送位置命令
- * @param  id 步进电机板级 ID，取值为 1 或 2
+ * @param  id 步进电机板级 ID，当前仅支持 1
  * @param  angle 目标角度，符号表示方向
- * @param  speed 协议速度参数
- * @param  acceleration 协议加速度参数
+ * @param  speed 速度，单位 0.1 RPM（30000 表示 3000.0 RPM）
+ * @param  acceleration 加速和减速，单位 RPM/s
  * @param  mode 位置模式
  * @param  is_synchronized 等待多机同步触发标志
  * @retval STATUS_OK 步进电机命令发送已启动
@@ -797,7 +781,7 @@ status_code_t bsp_stepper_enable(uint8_t id, bool is_enabled)
 status_code_t bsp_stepper_move(uint8_t id, float angle, uint16_t speed, uint16_t acceleration,
     bsp_stepper_move_mode_t mode, bool is_synchronized)
 {
-    if (id < 1U || id > 2U) {
+    if (id != BSP_STEPPER_ID) {
         return STATUS_OUT_OF_RANGE;
     }
     if ((mode != BSP_STEPPER_MODE_RELATIVE_TARGET) && (mode != BSP_STEPPER_MODE_ABSOLUTE) &&
