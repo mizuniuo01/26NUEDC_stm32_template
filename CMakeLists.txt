@@ -69,6 +69,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     User/services/bluetooth_service.c
     User/services/display.c
     User/services/error_service.c
+    User/services/menu_action_service.c
     User/services/menu_service.c
     User/services/parameter_service.c
 )

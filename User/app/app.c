@@ -1,11 +1,11 @@
 /**
  * @file app.c
- * @brief 组合 26NUEDC_stm32_template 的板级能力、速度控制器、参数服务和 OLED 菜单。
+ * @brief 组合板级能力、速度控制器、参数服务、OLED 菜单和菜单动作扩展。
  * @note 本文件是当前固件的系统 Composition Root。main.c 只负责 CubeMX 平台启动、
  *       启动 TIM6 后调用 app_init()，并在无限循环中调用 app_run_once()。
- * @note app_init() 依次初始化 BSP、唯一速度控制器、Parameter Service 和 Menu Service。
- *       任一步失败都会停止后续初始化并把状态返回 main.c；OLED 自身的异步初始化由
- *       bsp_board_process() 在主循环中继续推进。
+ * @note app_init() 依次初始化 BSP、唯一速度控制器、Parameter Service、Menu Service 和
+ *       Menu Action Service。任一步失败都会停止后续初始化并把状态返回 main.c；OLED
+ *       自身的异步初始化由 bsp_board_process() 在主循环中继续推进。
  * @note 参数注册采用“静态描述符数组 + sizeof(array) / sizeof(array[0])”形式，数量不
  *       单独手填。每个回调先调用速度控制器类型化 get/apply API，禁止保存或暴露 PID
  *       内部字段指针。共同速度 PID 每次提交都会同步左右速度环。
@@ -17,13 +17,14 @@
  *       STATUS_UNAVAILABLE，菜单会在固定位置显示“--”。
  * @note OLED 和按键只在本文件的端口适配函数中连接 BSP。Menu Service 不知道当前板卡、
  *       引脚、HAL 句柄或器件类型，主机测试可用同一端口契约注入替身。
- * @note app_run_once() 始终先推进 BSP，再推进菜单。菜单错误只在状态发生变化时记录一次，
- *       避免不可用设备在高速主循环中淹没固定容量诊断缓冲区。
+ * @note app_run_once() 始终按 BSP、菜单、菜单动作的顺序推进。服务错误只在状态发生变化时
+ *       记录一次，避免不可用设备在高速主循环中淹没固定容量诊断缓冲区。
  * @warning app_init() 和 app_run_once() 只能在主循环任务上下文调用，不允许从 ISR 调用。
  */
 #include "app.h"
 #include "bsp_board.h"
 #include "error_service.h"
+#include "menu_action_service.h"
 #include "menu_service.h"
 #include "parameter_service.h"
 #include "speed_controller.h"
@@ -31,7 +32,7 @@
 
 #define APP_DEBUG_REFRESH_PERIOD_MS 250U /* 调试页周期同步时间，单位：毫秒 */
 #define APP_LIVE_REFRESH_PERIOD_MS 100U /* 实时页目标刷新时间，单位：毫秒 */
-#define APP_MENU_LONG_PRESS_MS 800U /* K3 长按进入步长编辑的阈值，单位：毫秒 */
+#define APP_MENU_LONG_PRESS_MS 800U /* 菜单控制键长按阈值，单位：毫秒 */
 #define APP_MENU_REPEAT_DELAY_MS 500U /* K1/K2 首次连发等待时间，单位：毫秒 */
 #define APP_MENU_REPEAT_PERIOD_MS 100U /* K1/K2 连发周期，单位：毫秒 */
 
@@ -89,7 +90,9 @@ typedef struct {
 static speed_controller_t speed_controller;
 static parameter_service_t parameter_service;
 static menu_service_t menu_service;
+static menu_action_service_t menu_action_service;
 static status_code_t last_menu_status;
+static status_code_t last_menu_action_status;
 
 static app_speed_pid_context_t speed_kp_context = {.field = APP_SPEED_PID_FIELD_KP};
 static app_speed_pid_context_t speed_ki_context = {.field = APP_SPEED_PID_FIELD_KI};
@@ -589,7 +592,17 @@ status_code_t app_init(void)
     if (status != STATUS_OK) {
         return status;
     }
+    status = menu_action_service_init(&menu_action_service,
+        &(menu_action_service_config_t){
+            .menu = &menu_service,
+            .bindings = NULL,
+            .binding_count = 0U,
+        });
+    if (status != STATUS_OK) {
+        return status;
+    }
     last_menu_status = STATUS_OK;
+    last_menu_action_status = STATUS_OK;
     return STATUS_OK;
 }
 
@@ -606,4 +619,9 @@ void app_run_once(void)
         error_service_record(STATUS_SOURCE_MENU, status, bsp_time_get_ms());
     }
     last_menu_status = status;
+    status = menu_action_service_process(&menu_action_service);
+    if ((status != STATUS_OK) && (status != last_menu_action_status)) {
+        error_service_record(STATUS_SOURCE_DOMAIN, status, bsp_time_get_ms());
+    }
+    last_menu_action_status = status;
 }

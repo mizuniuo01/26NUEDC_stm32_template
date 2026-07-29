@@ -18,6 +18,13 @@ typedef enum {
     MENU_SERVICE_MODE_LIVE,      /* 只读实时数据滚动显示 */
 } menu_service_mode_t;
 
+/* Live 模式发布给扩展服务的逻辑动作位掩码 */
+typedef enum {
+    MENU_SERVICE_LIVE_ACTION_NONE = 0U,           /* 当前没有待处理动作 */
+    MENU_SERVICE_LIVE_ACTION_PRIMARY = (1U << 0), /* 主动作，当前映射物理 K3 */
+    MENU_SERVICE_LIVE_ACTION_SECONDARY = (1U << 1), /* 次动作，当前映射物理 K4 */
+} menu_service_live_action_t;
+
 /* 调试模式的三级页面状态 */
 typedef enum {
     MENU_SERVICE_DEBUG_GROUP = 0, /* L1 参数分组列表 */
@@ -68,7 +75,7 @@ typedef struct {
     menu_service_port_t port;                  /* 由 Application 绑定的最小端口 */
     uint32_t debug_refresh_period_ms;          /* 调试页同步周期，单位：毫秒 */
     uint32_t live_refresh_period_ms;           /* 实时页目标刷新周期，单位：毫秒 */
-    uint32_t long_press_ms;                    /* K3 长按阈值，单位：毫秒 */
+    uint32_t long_press_ms;                    /* 菜单控制键长按阈值，单位：毫秒 */
     uint32_t repeat_delay_ms;                  /* K1/K2 首次连发延时，单位：毫秒 */
     uint32_t repeat_period_ms;                 /* K1/K2 连发周期，单位：毫秒 */
 } menu_service_config_t;
@@ -106,6 +113,7 @@ typedef struct {
     char notification[MENU_SERVICE_NOTIFICATION_CAPACITY]; /* 底部短通知 */
     uint8_t previous_key_state;     /* 上一次稳定按键位掩码 */
     uint8_t long_emitted_mask;      /* 已产生长按事件的按键位掩码 */
+    uint8_t pending_live_actions;   /* 尚未由扩展服务取走的 Live 动作位掩码 */
     bool is_key_chord_blocked;       /* K1–K4 组合键释放前忽略输入的标志 */
     bool is_dirty;                  /* 界面状态变更后等待提交新帧 */
     bool is_initialized;            /* 菜单服务初始化完成标志 */
@@ -116,5 +124,6 @@ status_code_t menu_service_init(menu_service_t *menu, const menu_service_config_
 status_code_t menu_service_process(menu_service_t *menu);
 status_code_t menu_service_get_snapshot(const menu_service_t *menu,
     menu_service_snapshot_t *snapshot);
+status_code_t menu_service_take_live_actions(menu_service_t *menu, uint8_t *actions);
 
 #endif /* AUTO_BALL_CAR_USER_SERVICES_MENU_SERVICE_H */

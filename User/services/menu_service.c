@@ -14,6 +14,8 @@
  *       scalar_value_t；数据尚未有效时返回 STATUS_UNAVAILABLE，界面固定显示“--”。
  * @note 显示模式默认 Debug。K5 按下沿在 Debug/Live 间切换，并保留调试页、实时滚动位置
  *       和未提交草稿。K5 与其他按键同周期触发时仅处理模式切换。
+ * @note Live 模式把 K3/K4 有效短按分别发布为主/次逻辑动作。Menu Action Service 可取走
+ *       动作并调用 Application 注册的业务回调；本服务不直接依赖任何执行器。
  * @note Debug 交互为 L1 分组、L2 参数、L3 数值和步长。K1/K2 导航或增减，K3 短按
  *       进入/确认、长按进入步长编辑，K4 返回/取消。数值在注册范围内钳制，列表首尾循环。
  * @note 草稿确认前不写入参数所有者。确认时重读当前值；若其他入口已修改同一参数，显示
@@ -704,7 +706,7 @@ static status_code_t menu_service_render_live(menu_service_t *menu, uint32_t now
             return status;
         }
     }
-    return menu_service_draw_hint(menu, now_ms, "1/2:scroll 5:debug");
+    return menu_service_draw_hint(menu, now_ms, "1/2:scr 3/4:act 5:dbg");
 }
 
 /**
@@ -1006,8 +1008,12 @@ static void menu_service_handle_action(menu_service_t *menu, menu_service_action
     uint32_t now_ms)
 {
     if (action == MENU_SERVICE_ACTION_MODE) {
-        menu->mode = menu->mode == MENU_SERVICE_MODE_DEBUG ? MENU_SERVICE_MODE_LIVE
-                                                           : MENU_SERVICE_MODE_DEBUG;
+        if (menu->mode == MENU_SERVICE_MODE_DEBUG) {
+            menu->mode = MENU_SERVICE_MODE_LIVE;
+        } else {
+            menu->mode = MENU_SERVICE_MODE_DEBUG;
+            menu->pending_live_actions = MENU_SERVICE_LIVE_ACTION_NONE;
+        }
         menu->is_dirty = true;
         return;
     }
@@ -1024,6 +1030,12 @@ static void menu_service_handle_action(menu_service_t *menu, menu_service_action
                (menu->config.live_item_count > MENU_SERVICE_VISIBLE_ITEM_COUNT)) {
         menu->live_scroll = (menu->live_scroll + 1U) % menu->config.live_item_count;
         menu->is_dirty = true;
+    } else if (action == MENU_SERVICE_ACTION_CONFIRM) {
+        menu->pending_live_actions |= MENU_SERVICE_LIVE_ACTION_PRIMARY;
+    } else if ((action == MENU_SERVICE_ACTION_CANCEL) &&
+               ((uint32_t)(now_ms - menu->pressed_at_ms[MENU_SERVICE_KEY_CANCEL]) <
+                   menu->config.long_press_ms)) {
+        menu->pending_live_actions |= MENU_SERVICE_LIVE_ACTION_SECONDARY;
     }
 }
 
@@ -1131,6 +1143,7 @@ status_code_t menu_service_init(menu_service_t *menu, const menu_service_config_
     menu->notification_until_ms = now_ms;
     menu->notification[0] = '\0';
     menu->long_emitted_mask = 0U;
+    menu->pending_live_actions = MENU_SERVICE_LIVE_ACTION_NONE;
     menu->is_key_chord_blocked = false;
     menu->is_dirty = true;
     status = config->port.get_keys(config->port.context, &key_state);
@@ -1219,5 +1232,26 @@ status_code_t menu_service_get_snapshot(const menu_service_t *menu,
     snapshot->edit_value = menu->edit_value;
     snapshot->has_draft = (menu->debug_state == MENU_SERVICE_DEBUG_EDIT) ||
                           (menu->debug_state == MENU_SERVICE_DEBUG_STEP);
+    return STATUS_OK;
+}
+
+/**
+ * @brief 取走尚未由扩展服务处理的 Live 逻辑动作
+ * @param menu 已初始化菜单实例
+ * @param actions 接收 MENU_SERVICE_LIVE_ACTION_* 位掩码的存储地址
+ * @retval STATUS_OK 动作位掩码已写入并从菜单清除
+ * @retval STATUS_INVALID_ARGUMENT 任一参数为空
+ * @retval STATUS_NOT_INITIALIZED 菜单尚未初始化
+ */
+status_code_t menu_service_take_live_actions(menu_service_t *menu, uint8_t *actions)
+{
+    if (!menu || !actions) {
+        return STATUS_INVALID_ARGUMENT;
+    }
+    if (!menu->is_initialized) {
+        return STATUS_NOT_INITIALIZED;
+    }
+    *actions = menu->pending_live_actions;
+    menu->pending_live_actions = MENU_SERVICE_LIVE_ACTION_NONE;
     return STATUS_OK;
 }
