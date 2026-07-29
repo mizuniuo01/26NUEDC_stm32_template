@@ -27,6 +27,13 @@
 #define STEPPER_TEST_COMMAND_CLEAR_POSITION 0x0AU /* 位置清零应答功能码 */
 #define STEPPER_TEST_RESPONSE_OK 0x02U /* 命令正确接收返回码 */
 #define STEPPER_TEST_POSITION_TOLERANCE_DEG 1.0F /* 实测位置允许误差，单位：度 */
+#define STEPPER_TEST_DISPLAY_X 0 /* 测试信息显示区横坐标 */
+#define STEPPER_TEST_DISPLAY_STATUS_Y 0 /* 测试总状态显示行纵坐标 */
+#define STEPPER_TEST_DISPLAY_STEP_Y 20 /* 当前步骤显示行纵坐标 */
+#define STEPPER_TEST_DISPLAY_ACK_Y 40 /* 电机应答显示行纵坐标 */
+#define STEPPER_TEST_DISPLAY_POSITION_Y 60 /* 实时位置显示行纵坐标 */
+#define STEPPER_TEST_DISPLAY_CHECK_Y 80 /* 接口检查显示行纵坐标 */
+#define STEPPER_TEST_DISPLAY_HELP_Y 100 /* 测试命令提示行纵坐标 */
 
 /* 测试步骤执行动作 */
 typedef enum {
@@ -142,12 +149,15 @@ static void report_check(const char *name, status_code_t actual, status_code_t e
 {
     if (actual == expected) {
         passed_checks++;
-        (void)bluetooth_service_printf("[stepper-test] PASS %s status=%u\r\n", name,
-            (unsigned int)actual);
+        (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X,
+            STEPPER_TEST_DISPLAY_CHECK_Y, "PASS %s S=%u P=%u F=%u", name,
+            (unsigned int)actual, (unsigned int)passed_checks, (unsigned int)failed_checks);
     } else {
         failed_checks++;
-        (void)bluetooth_service_printf("[stepper-test] FAIL %s actual=%u expected=%u\r\n", name,
-            (unsigned int)actual, (unsigned int)expected);
+        (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X,
+            STEPPER_TEST_DISPLAY_CHECK_Y, "FAIL %s A=%u E=%u P=%u F=%u", name,
+            (unsigned int)actual, (unsigned int)expected, (unsigned int)passed_checks,
+            (unsigned int)failed_checks);
     }
 }
 
@@ -225,15 +235,19 @@ static void on_run_command(const char *name, const char *value, void *context)
     (void)context;
     if ((test_state != STEPPER_TEST_STATE_IDLE) &&
         (test_state != STEPPER_TEST_STATE_COMPLETE)) {
-        (void)bluetooth_service_printf("[stepper-test] BUSY state=%u\r\n",
-            (unsigned int)test_state);
+        (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X,
+            STEPPER_TEST_DISPLAY_STATUS_Y, "BUSY state=%u", (unsigned int)test_state);
         return;
     }
     step_index = 0U;
     passed_checks = 0U;
     failed_checks = 0U;
     test_state = STEPPER_TEST_STATE_PREFLIGHT;
-    (void)bluetooth_service_printf("[stepper-test] START speed=60.0RPM accel=300RPM/s\r\n");
+    (void)bluetooth_service_clear_display();
+    (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X, STEPPER_TEST_DISPLAY_STATUS_Y,
+        "START 60.0RPM 300RPM/s");
+    (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X, STEPPER_TEST_DISPLAY_HELP_Y,
+        "stop:@stepper_stop# status:@stepper_status#");
 }
 
 /**
@@ -248,7 +262,8 @@ static void on_stop_command(const char *name, const char *value, void *context)
     (void)value;
     (void)context;
     test_state = STEPPER_TEST_STATE_ABORT_STOP;
-    (void)bluetooth_service_printf("[stepper-test] ABORT requested\r\n");
+    (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X, STEPPER_TEST_DISPLAY_STATUS_Y,
+        "ABORT requested");
 }
 
 /**
@@ -269,14 +284,17 @@ static void on_status_command(const char *name, const char *value, void *context
     (void)context;
     response_status = bsp_stepper_response(STEPPER_TEST_MOTOR_ID, &response);
     position_status = bsp_stepper_position(STEPPER_TEST_MOTOR_ID, &position);
-    (void)bluetooth_service_printf(
-        "[stepper-test] state=%u step=%u pass=%u fail=%u ack=%u cmd=%02X code=%02X "
-        "seq=%lu pos_status=%u pos=%.2f pos_seq=%lu\r\n",
-        (unsigned int)test_state, (unsigned int)step_index, (unsigned int)passed_checks,
-        (unsigned int)failed_checks, (unsigned int)response_status,
+    (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X, STEPPER_TEST_DISPLAY_STATUS_Y,
+        "state=%u step=%u P=%u F=%u", (unsigned int)test_state, (unsigned int)step_index,
+        (unsigned int)passed_checks, (unsigned int)failed_checks);
+    (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X, STEPPER_TEST_DISPLAY_ACK_Y,
+        "ACK S=%u C=%02X R=%02X #%lu", (unsigned int)response_status,
         (unsigned int)response.command, (unsigned int)response.code,
-        (unsigned long)response.sequence, (unsigned int)position_status,
-        (double)position.angle_deg, (unsigned long)position.sequence);
+        (unsigned long)response.sequence);
+    (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X, STEPPER_TEST_DISPLAY_POSITION_Y,
+        "POS S=%u A=%.2f #%lu",
+        (unsigned int)position_status, (double)position.angle_deg,
+        (unsigned long)position.sequence);
 }
 
 /**
@@ -290,6 +308,10 @@ status_code_t stepper_hardware_test_init(void)
     status_code_t status;
 
     bluetooth_service_init();
+    status = bluetooth_service_clear_display();
+    if (status != STATUS_OK) {
+        return status;
+    }
     status = bsp_bluetooth_bind("stepper_run", on_run_command, NULL);
     if (status != STATUS_OK) {
         return status;
@@ -303,8 +325,13 @@ status_code_t stepper_hardware_test_init(void)
         return status;
     }
     test_state = STEPPER_TEST_STATE_IDLE;
-    return bluetooth_service_printf(
-        "[stepper-test] READY @stepper_run# @stepper_stop# @stepper_status#\r\n");
+    status = bluetooth_service_display(STEPPER_TEST_DISPLAY_X, STEPPER_TEST_DISPLAY_STATUS_Y,
+        "STEPPER READY");
+    if (status != STATUS_OK) {
+        return status;
+    }
+    return bluetooth_service_display(STEPPER_TEST_DISPLAY_X, STEPPER_TEST_DISPLAY_HELP_Y,
+        "run:@stepper_run# stop:@stepper_stop# status:@stepper_status#");
 }
 
 /**
@@ -337,6 +364,9 @@ status_code_t stepper_hardware_test_process(void)
             return STATUS_OK;
         case STEPPER_TEST_STATE_SEND:
             step = &test_steps[step_index];
+            (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X,
+                STEPPER_TEST_DISPLAY_STEP_Y, "STEP %u/%u %s", (unsigned int)(step_index + 1U),
+                (unsigned int)(sizeof(test_steps) / sizeof(test_steps[0])), step->name);
             status = bsp_stepper_response(STEPPER_TEST_MOTOR_ID, &response);
             response_sequence_before_send = status == STATUS_OK ? response.sequence : 0U;
             status = execute_step(step);
@@ -363,13 +393,13 @@ status_code_t stepper_hardware_test_process(void)
                 if ((response.command == step->expected_command) &&
                     (response.code == STEPPER_TEST_RESPONSE_OK)) {
                     passed_checks++;
-                    (void)bluetooth_service_printf(
-                        "[stepper-test] PASS ack step=%s cmd=%02X code=%02X\r\n", step->name,
+                    (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X,
+                        STEPPER_TEST_DISPLAY_ACK_Y, "PASS ACK %s C=%02X R=%02X", step->name,
                         (unsigned int)response.command, (unsigned int)response.code);
                 } else {
                     failed_checks++;
-                    (void)bluetooth_service_printf(
-                        "[stepper-test] FAIL ack step=%s cmd=%02X code=%02X\r\n", step->name,
+                    (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X,
+                        STEPPER_TEST_DISPLAY_ACK_Y, "FAIL ACK %s C=%02X R=%02X", step->name,
                         (unsigned int)response.command, (unsigned int)response.code);
                     test_state = STEPPER_TEST_STATE_ABORT_STOP;
                     return STATUS_OK;
@@ -378,8 +408,8 @@ status_code_t stepper_hardware_test_process(void)
                 test_state = STEPPER_TEST_STATE_WAIT_MOTION;
             } else if (deadline_reached(now, deadline_ms)) {
                 failed_checks++;
-                (void)bluetooth_service_printf("[stepper-test] FAIL ack-timeout step=%s\r\n",
-                    step->name);
+                (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X,
+                    STEPPER_TEST_DISPLAY_ACK_Y, "FAIL ACK timeout %s", step->name);
                 test_state = STEPPER_TEST_STATE_ABORT_STOP;
             }
             return STATUS_OK;
@@ -436,27 +466,29 @@ status_code_t stepper_hardware_test_process(void)
                 if (is_position_valid) {
                     passed_checks++;
                     if (step->position_check == STEPPER_TEST_POSITION_CHECK_EXACT) {
-                        (void)bluetooth_service_printf(
-                            "[stepper-test] PASS position step=%s target=%.2f actual=%.2f "
-                            "error=%.2f\r\n",
+                        (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X,
+                            STEPPER_TEST_DISPLAY_POSITION_Y,
+                            "PASS POS %s T=%.2f A=%.2f E=%.2f",
                             step->name, (double)step->expected_position_deg,
                             (double)position.angle_deg, (double)position_error_deg);
                     } else {
-                        (void)bluetooth_service_printf(
-                            "[stepper-test] PASS active-stop actual=%.2f limit=%.2f\r\n",
+                        (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X,
+                            STEPPER_TEST_DISPLAY_POSITION_Y,
+                            "PASS STOP A=%.2f L=%.2f",
                             (double)position.angle_deg, (double)step->expected_position_deg);
                     }
                 } else {
                     failed_checks++;
                     if (step->position_check == STEPPER_TEST_POSITION_CHECK_EXACT) {
-                        (void)bluetooth_service_printf(
-                            "[stepper-test] FAIL position step=%s target=%.2f actual=%.2f "
-                            "error=%.2f\r\n",
+                        (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X,
+                            STEPPER_TEST_DISPLAY_POSITION_Y,
+                            "FAIL POS %s T=%.2f A=%.2f E=%.2f",
                             step->name, (double)step->expected_position_deg,
                             (double)position.angle_deg, (double)position_error_deg);
                     } else {
-                        (void)bluetooth_service_printf(
-                            "[stepper-test] FAIL active-stop actual=%.2f limit=%.2f\r\n",
+                        (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X,
+                            STEPPER_TEST_DISPLAY_POSITION_Y,
+                            "FAIL STOP A=%.2f L=%.2f",
                             (double)position.angle_deg, (double)step->expected_position_deg);
                     }
                     test_state = STEPPER_TEST_STATE_ABORT_STOP;
@@ -466,8 +498,8 @@ status_code_t stepper_hardware_test_process(void)
                 test_state = STEPPER_TEST_STATE_SEND;
             } else if (deadline_reached(now, deadline_ms)) {
                 failed_checks++;
-                (void)bluetooth_service_printf(
-                    "[stepper-test] FAIL position-timeout step=%s\r\n", step->name);
+                (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X,
+                    STEPPER_TEST_DISPLAY_POSITION_Y, "FAIL POS timeout %s", step->name);
                 test_state = STEPPER_TEST_STATE_ABORT_STOP;
             }
             return STATUS_OK;
@@ -476,7 +508,8 @@ status_code_t stepper_hardware_test_process(void)
                 bsp_stepper_move(STEPPER_TEST_MOTOR_ID, 1.0F, STEPPER_TEST_SPEED_RPM_X10,
                     STEPPER_TEST_ACCELERATION_RPM_S, BSP_STEPPER_MODE_RELATIVE_CURRENT, false),
                 STATUS_STATE_ERROR);
-            (void)bluetooth_service_printf("[stepper-test] DONE pass=%u fail=%u\r\n",
+            (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X,
+                STEPPER_TEST_DISPLAY_STATUS_Y, "DONE P=%u F=%u",
                 (unsigned int)passed_checks, (unsigned int)failed_checks);
             test_state = STEPPER_TEST_STATE_COMPLETE;
             return STATUS_OK;
@@ -498,7 +531,8 @@ status_code_t stepper_hardware_test_process(void)
                 return STATUS_OK;
             }
             report_check("abort-disable", status, STATUS_OK);
-            (void)bluetooth_service_printf("[stepper-test] ABORTED pass=%u fail=%u\r\n",
+            (void)bluetooth_service_display(STEPPER_TEST_DISPLAY_X,
+                STEPPER_TEST_DISPLAY_STATUS_Y, "ABORTED P=%u F=%u",
                 (unsigned int)passed_checks, (unsigned int)failed_checks);
             test_state = STEPPER_TEST_STATE_COMPLETE;
             return STATUS_OK;
