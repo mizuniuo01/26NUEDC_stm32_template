@@ -417,6 +417,8 @@ void bsp_board_uart_rx_event_isr(void *uart_handle, uint16_t size)
     }
     if (uart->Instance == USART1) {
         driver_uart_stream_rx_event_isr(&bluetooth_stream, size);
+    } else if (uart->Instance == USART2) {
+        driver_stepper_rx_event_isr(&stepper[0], uart, size);
     } else if (uart->Instance == USART3) {
         driver_uart_stream_rx_event_isr(&camera_stream, size);
     } else if (uart->Instance == USART6) {
@@ -790,6 +792,120 @@ status_code_t bsp_stepper_move(uint8_t id, float angle, uint16_t speed, uint16_t
     }
     return driver_stepper_move(&stepper[id - 1U], angle, speed, acceleration,
         (driver_stepper_move_mode_t)mode, is_synchronized);
+}
+
+/**
+ * @brief  立即停止当前步进电机运动并保持使能状态
+ * @param  id 步进电机板级 ID，当前仅支持 1
+ * @retval STATUS_OK 停止命令发送已启动
+ * @retval STATUS_OUT_OF_RANGE id 超出支持范围
+ * @retval STATUS_NOT_INITIALIZED 步进电机驱动尚未初始化
+ * @retval STATUS_BUSY 串口 DMA 正忙
+ * @retval STATUS_IO_ERROR 串口 DMA 发送启动失败
+ */
+status_code_t bsp_stepper_stop(uint8_t id)
+{
+    if (id != BSP_STEPPER_ID) {
+        return STATUS_OUT_OF_RANGE;
+    }
+    return driver_stepper_stop(&stepper[id - 1U]);
+}
+
+/**
+ * @brief  将指定步进电机的当前位置设置为坐标零点
+ * @param  id 步进电机板级 ID，当前仅支持 1
+ * @retval STATUS_OK 清零命令发送已启动
+ * @retval STATUS_OUT_OF_RANGE id 超出支持范围
+ * @retval STATUS_NOT_INITIALIZED 步进电机驱动尚未初始化
+ * @retval STATUS_BUSY 串口 DMA 正忙
+ * @retval STATUS_IO_ERROR 串口 DMA 发送启动失败
+ */
+status_code_t bsp_stepper_clear_position(uint8_t id)
+{
+    if (id != BSP_STEPPER_ID) {
+        return STATUS_OUT_OF_RANGE;
+    }
+    return driver_stepper_clear_position(&stepper[id - 1U]);
+}
+
+/**
+ * @brief  请求指定步进电机返回实时位置
+ * @param  id 步进电机板级 ID，当前仅支持 1
+ * @retval STATUS_OK 位置读取命令发送已启动
+ * @retval STATUS_OUT_OF_RANGE id 超出支持范围
+ * @retval STATUS_NOT_INITIALIZED 步进电机驱动尚未初始化
+ * @retval STATUS_BUSY 串口 DMA 正忙
+ * @retval STATUS_IO_ERROR 串口 DMA 发送启动失败
+ */
+status_code_t bsp_stepper_read_position(uint8_t id)
+{
+    if (id != BSP_STEPPER_ID) {
+        return STATUS_OUT_OF_RANGE;
+    }
+    return driver_stepper_read_position(&stepper[id - 1U]);
+}
+
+/**
+ * @brief  获取步进电机最近一次有效控制命令应答
+ * @param  id 步进电机板级 ID，当前仅支持 1
+ * @param  response 接收应答快照的存储地址
+ * @retval STATUS_OK 应答快照已写入
+ * @retval STATUS_INVALID_ARGUMENT response 为空
+ * @retval STATUS_OUT_OF_RANGE id 超出支持范围
+ * @retval STATUS_NOT_INITIALIZED 步进电机驱动尚未初始化
+ * @retval STATUS_UNAVAILABLE 尚未收到有效应答
+ */
+status_code_t bsp_stepper_response(uint8_t id, bsp_stepper_response_t *response)
+{
+    driver_stepper_response_t driver_response;
+    status_code_t status;
+
+    if (!response) {
+        return STATUS_INVALID_ARGUMENT;
+    }
+    if (id != BSP_STEPPER_ID) {
+        return STATUS_OUT_OF_RANGE;
+    }
+    status = driver_stepper_response_snapshot(&stepper[id - 1U], &driver_response);
+    if ((status != STATUS_OK) && (status != STATUS_UNAVAILABLE)) {
+        return status;
+    }
+    response->command = driver_response.command;
+    response->code = driver_response.code;
+    response->sequence = driver_response.sequence;
+    response->is_valid = driver_response.is_valid;
+    return status;
+}
+
+/**
+ * @brief  获取指定步进电机最近一次有效的实时位置
+ * @param  id 步进电机板级 ID，当前仅支持 1
+ * @param  position 接收实时位置快照的地址
+ * @retval STATUS_OK 有效位置快照已写入
+ * @retval STATUS_INVALID_ARGUMENT position 为空
+ * @retval STATUS_OUT_OF_RANGE id 超出支持范围
+ * @retval STATUS_NOT_INITIALIZED 步进电机驱动尚未初始化
+ * @retval STATUS_UNAVAILABLE 尚未收到有效位置应答
+ */
+status_code_t bsp_stepper_position(uint8_t id, bsp_stepper_position_t *position)
+{
+    driver_stepper_position_t driver_position;
+    status_code_t status;
+
+    if (!position) {
+        return STATUS_INVALID_ARGUMENT;
+    }
+    if (id != BSP_STEPPER_ID) {
+        return STATUS_OUT_OF_RANGE;
+    }
+    status = driver_stepper_position_snapshot(&stepper[id - 1U], &driver_position);
+    if ((status != STATUS_OK) && (status != STATUS_UNAVAILABLE)) {
+        return status;
+    }
+    position->angle_deg = driver_position.angle_deg;
+    position->sequence = driver_position.sequence;
+    position->is_valid = driver_position.is_valid;
+    return status;
 }
 
 /**

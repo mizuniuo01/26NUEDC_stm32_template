@@ -45,8 +45,23 @@ typedef struct {
 typedef enum {
     BSP_STEPPER_MODE_RELATIVE_TARGET = 0x00U, /* 相对上一目标位置 */
     BSP_STEPPER_MODE_ABSOLUTE = 0x01U,        /* 相对坐标零点 */
-    BSP_STEPPER_MODE_RELATIVE_CURRENT = 0x02U /* 相对当前实时位置 */
+    BSP_STEPPER_MODE_RELATIVE_CURRENT = 0x02U, /* 相对当前实时位置 */
 } bsp_stepper_move_mode_t;
+
+/* 最近一次 ZDT X42S 控制命令应答快照 */
+typedef struct {
+    uint8_t command;   /* 应答对应的功能码 */
+    uint8_t code;      /* 02/12/E2/EE/9F 等手册返回码 */
+    uint32_t sequence; /* 有效应答递增序号 */
+    bool is_valid;     /* 已收到至少一条有效应答 */
+} bsp_stepper_response_t;
+
+/* 最近一次 ZDT X42S 实时位置快照 */
+typedef struct {
+    float angle_deg;   /* 实时位置角度，单位：度 */
+    uint32_t sequence; /* 有效位置应答递增序号 */
+    bool is_valid;     /* 已收到至少一条有效位置应答 */
+} bsp_stepper_position_t;
 
 /* 姿态角数据快照 */
 typedef struct {
@@ -96,6 +111,11 @@ status_code_t bsp_servo_set_angle(uint8_t id, float angle);
 status_code_t bsp_stepper_enable(uint8_t id, bool is_enabled);
 status_code_t bsp_stepper_move(uint8_t id, float angle, uint16_t speed, uint16_t acceleration,
     bsp_stepper_move_mode_t mode, bool is_synchronized);
+status_code_t bsp_stepper_stop(uint8_t id);
+status_code_t bsp_stepper_clear_position(uint8_t id);
+status_code_t bsp_stepper_read_position(uint8_t id);
+status_code_t bsp_stepper_response(uint8_t id, bsp_stepper_response_t *response);
+status_code_t bsp_stepper_position(uint8_t id, bsp_stepper_position_t *position);
 
 /* 通信与感知接口 */
 status_code_t bsp_bluetooth_bind(const char *name, bsp_command_callback_t callback, void *context);
